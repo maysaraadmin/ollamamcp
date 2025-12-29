@@ -1,4 +1,6 @@
 <?php
+namespace local_ollamamcp\mcp;
+
 defined('MOODLE_INTERNAL') || die();
 
 /**
@@ -7,7 +9,7 @@ defined('MOODLE_INTERNAL') || die();
  * This class implements a Model Context Protocol server that bridges
  * Moodle with Ollama for AI-powered functionality.
  */
-class local_ollamamcp_mcp_server {
+class server {
     
     /** @var string Server host */
     private $host;
@@ -127,13 +129,26 @@ class local_ollamamcp_mcp_server {
                     break;
                 }
                 $request .= $chunk;
-                // Check if we have a complete JSON message (ends with newline or braces match)
-                if (strpos($request, "\n") !== false || $this->is_complete_json($request)) {
+                // Check if we have a complete request (ends with double newline)
+                if (strpos($request, "\r\n\r\n") !== false || strpos($request, "\n\n") !== false) {
                     break;
                 }
             }
             
             if (empty($request)) {
+                socket_close($client);
+                return;
+            }
+            
+            // Check if this is an HTTP request (simple health check)
+            if (strpos($request, 'GET /') === 0 || strpos($request, 'HEAD /') === 0) {
+                // Simple HTTP response for health check
+                $http_response = "HTTP/1.1 200 OK\r\n";
+                $http_response .= "Content-Type: text/plain\r\n";
+                $http_response .= "Content-Length: 2\r\n";
+                $http_response .= "\r\n";
+                $http_response .= "OK";
+                socket_write($client, $http_response);
                 socket_close($client);
                 return;
             }
@@ -168,7 +183,9 @@ class local_ollamamcp_mcp_server {
         } catch (Exception $e) {
             $this->send_error($client, -32603, 'Internal error: ' . $e->getMessage());
         } finally {
-            socket_close($client);
+            if ($client && is_resource($client)) {
+                socket_close($client);
+            }
         }
     }
     
@@ -373,7 +390,7 @@ class local_ollamamcp_mcp_server {
                 $info = [
                     'moodle_version' => $CFG->version,
                     'wwwroot' => $CFG->wwwroot,
-                    'plugin_version' => get_config('local_ollamamcp', 'version')
+                    'plugin_version' => get_config('local_ollamamcp', 'version') ?: '0.1.0'
                 ];
                 break;
         }
@@ -517,43 +534,6 @@ class local_ollamamcp_mcp_server {
      * Send error
      * 
      * @param resource $client Client socket
-                    CURLOPT_SSL_VERIFYHOST => 2
-                ]);
-                
-                $response = curl_exec($ch);
-                
-                if ($response === false) {
-                    throw new Exception('cURL error: ' . curl_error($ch));
-                }
-                
-                $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                if ($http_code !== 200) {
-                    $error_info = '';
-                    if ($response) {
-                        $error_response = json_decode($response, true);
-                        if (json_last_error() === JSON_ERROR_NONE && isset($error_response['error'])) {
-                            $error_info = ': ' . (is_string($error_response['error']) ? $error_response['error'] : json_encode($error_response['error']));
-                        }
-                    }
-                    throw new Exception('HTTP error ' . $http_code . $error_info);
-                }
-                
-                $result = json_decode($response, true);
-                if (json_last_error() !== JSON_ERROR_NONE) {
-                    throw new Exception('Invalid JSON response from Ollama: ' . json_last_error_msg());
-                }
-                
-                if (!isset($result['response'])) {
-                    throw new Exception('Invalid response format from Ollama: missing response field');
-                }
-                
-                return $result['response'];
-                
-            } finally {
-                if (is_resource($ch)) {
-                    curl_close($ch);
-                }
-            }
      * @param int $code Error code
      * @param string $message Error message
      */
@@ -582,5 +562,24 @@ class local_ollamamcp_mcp_server {
                 'message' => $message
             ]
         ];
+    }
+    
+    /**
+     * Check if JSON string is complete
+     * 
+     * @param string $json JSON string to check
+     * @return bool True if JSON is complete
+     */
+    private function is_complete_json($json) {
+        $trimmed = trim($json);
+        if (empty($trimmed)) {
+            return false;
+        }
+        
+        // Simple check for balanced braces
+        $open_count = substr_count($trimmed, '{');
+        $close_count = substr_count($trimmed, '}');
+        
+        return $open_count === $close_count && $open_count > 0;
     }
 }

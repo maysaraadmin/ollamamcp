@@ -154,7 +154,7 @@ define(['jquery'], function($) {
 
                 // Make real API call to Moodle
                 $.ajax({
-                    url: self.config.wwwroot + '/lib/ajax/service.php?method=local_ollamamcp_send_message',
+                    url: self.config.wwwroot + '/lib/ajax/service.php',
                     method: 'POST',
                     data: JSON.stringify([{
                         methodname: 'local_ollamamcp_send_message',

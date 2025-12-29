@@ -18,7 +18,7 @@ if ($hassiteconfig) {
     $settings->add(new admin_setting_configtext('local_ollamamcp/defaultmodel',
         get_string('defaultmodel', 'local_ollamamcp'),
         get_string('defaultmodel_desc', 'local_ollamamcp'),
-        'llama2', PARAM_TEXT));
+        'llama3.2:latest', PARAM_TEXT));
     
     $settings->add(new admin_setting_configtext('local_ollamamcp/apikey',
         get_string('apikey', 'local_ollamamcp'),
@@ -28,7 +28,7 @@ if ($hassiteconfig) {
     $settings->add(new admin_setting_configtext('local_ollamamcp/timeout',
         get_string('timeout', 'local_ollamamcp'),
         get_string('timeout_desc', 'local_ollamamcp'),
-        '30', PARAM_INT));
+        '60', PARAM_INT));
     
     $settings->add(new admin_setting_configtext('local_ollamamcp/contextlimit',
         get_string('contextlimit', 'local_ollamamcp'),

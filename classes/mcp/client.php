@@ -9,9 +9,9 @@ class client {
     private $timeout;
     
     public function __construct() {
-        $this->serverurl = get_config('local_ollamamcp', 'ollamaserver');
+        $this->serverurl = get_config('local_ollamamcp', 'ollamaserver') ?: 'http://localhost:11434';
         $this->apikey = get_config('local_ollamamcp', 'apikey');
-        $this->timeout = get_config('local_ollamamcp', 'timeout');
+        $this->timeout = get_config('local_ollamamcp', 'timeout') ?: 60;
     }
     
     public function generate_completion($prompt, $model = null, $options = []) {
@@ -24,7 +24,12 @@ class client {
         $data = [
             'model' => $model,
             'prompt' => $prompt,
-            'stream' => false
+            'stream' => false,
+            'options' => [
+                'num_predict' => 500,  // Limit response length for faster response
+                'temperature' => 0.7,
+                'top_p' => 0.9
+            ]
         ];
         
         if (!empty($options)) {
@@ -44,7 +49,12 @@ class client {
         $data = [
             'model' => $model,
             'messages' => $messages,
-            'stream' => false
+            'stream' => false,
+            'options' => [
+                'num_predict' => 500,  // Limit response length
+                'temperature' => 0.7,
+                'top_p' => 0.9
+            ]
         ];
         
         if (!empty($options)) {
@@ -80,6 +90,8 @@ class client {
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => $this->timeout,
             CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
         ]);
         
         if ($method === 'POST') {
@@ -89,15 +101,20 @@ class client {
         
         $response = curl_exec($curl);
         $error = curl_error($curl);
+        $http_code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
         curl_close($curl);
         
         if ($error) {
-            throw new \moodle_exception('curl_error', 'local_ollamamcp', '', $error);
+            throw new \Exception("cURL Error (HTTP $http_code): $error");
+        }
+        
+        if ($http_code !== 200) {
+            throw new \Exception("HTTP Error: $http_code - Response: " . substr($response, 0, 200));
         }
         
         $decoded = json_decode($response, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new \moodle_exception('json_error', 'local_ollamamcp', '', json_last_error_msg());
+            throw new \Exception('JSON Error: ' . json_last_error_msg() . ' - Response: ' . substr($response, 0, 200));
         }
         
         return $decoded;

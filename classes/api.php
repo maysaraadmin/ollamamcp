@@ -79,6 +79,10 @@ class api {
         }
     }
     
+    public function generate_completion($prompt, $model = null) {
+        return $this->client->generate_completion($prompt, $model);
+    }
+    
     public function get_available_models() {
         return $this->client->list_models();
     }

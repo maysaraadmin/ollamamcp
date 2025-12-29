@@ -3,6 +3,7 @@ namespace local_ollamamcp\external;
 
 defined('MOODLE_INTERNAL') || die();
 
+global $CFG;
 require_once($CFG->libdir.'/externallib.php');
 
 class send_message extends \external_api {
@@ -47,20 +48,21 @@ class send_message extends \external_api {
         }
         
         try {
-            // Use the API class to get response
+            // Use the API class with generate endpoint (faster)
             $api = new \local_ollamamcp\api();
-            $response = $api->chat_with_context([
-                ['role' => 'user', 'content' => $message]
-            ]);
+            $response = $api->generate_completion($message);
             
             return [
-                'response' => $response['response'] ?? 'Sorry, I could not process your request.',
+                'response' => $response['response'] ?? 'No response from AI assistant.',
             ];
             
         } catch (\Exception $e) {
-            // Return a user-friendly error message
+            // Log the actual error for debugging
+            debugging('AI Assistant Error: ' . $e->getMessage(), DEBUG_DEVELOPER);
+            
+            // Return user-friendly error message
             return [
-                'response' => 'AI service is not configured. Please contact your administrator.',
+                'response' => 'Sorry, I could not process your request. Please try again.',
             ];
         }
     }
