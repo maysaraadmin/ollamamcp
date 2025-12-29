@@ -278,34 +278,45 @@ function sendOllamaRequest(message) {
 }
 
 function createPlatformSpecificPrompt(platformInfo, contextInfo, dataType, originalMessage) {
-    var prompt = 'You are an AI assistant EXCLUSIVELY for the Moodle LMS platform at: ' + platformInfo.platform_url + '\\n\\n';
-    prompt += '=== CRITICAL PLATFORM IDENTIFICATION ===\\n';
+    var prompt = '=== MOODLE-DATA-ONLY AI ASSISTANT ===\\n';
+    prompt += 'You are an AI assistant EXCLUSIVELY for the Moodle LMS platform at: ' + platformInfo.platform_url + '\\n\\n';
+    prompt += '=== CRITICAL MOODLE PLATFORM IDENTIFICATION ===\\n';
     prompt += 'Platform Name: ' + platformInfo.platform_name + '\\n';
     prompt += 'Platform URL: ' + platformInfo.platform_url + '\\n';
     prompt += 'Platform Version: ' + platformInfo.platform_version + '\\n';
     prompt += 'Site Name: ' + platformInfo.site_name + '\\n';
-    prompt += 'Validation Hash: ' + platformInfo.validation_hash + '\\n\\n';
+    prompt += 'Validation Hash: ' + platformInfo.validation_hash + '\\n';
+    prompt += 'Data Source: ' + (platformInfo.data_source || 'MOODLE_DATABASE_ONLY') + '\\n\\n';
     
-    prompt += '=== STRICT DATA USAGE RULES ===\\n';
+    prompt += '=== ABSOLUTE MOODLE-DATA-ONLY RULES ===\\n';
     prompt += '1. YOU MUST ONLY use data from THIS SPECIFIC Moodle platform at ' + platformInfo.platform_url + '\\n';
     prompt += '2. NEVER reference ANY external platforms, websites, or generic examples\\n';
     prompt += '3. NEVER mention Facebook, Instagram, Twitter, LinkedIn, YouTube, WhatsApp, etc.\\n';
     prompt += '4. NEVER mention Amazon, eBay, TikTok, Fortnite, or any other platforms\\n';
-    prompt += '5. ALL responses must be based EXCLUSIVELY on data from THIS Moodle installation\\n';
-    prompt += '6. If no data exists for a query, clearly state: \'No data exists in this Moodle platform\'\\n';
-    prompt += '7. DO NOT make up or assume any information about this Moodle platform\\n';
-    prompt += '8. ONLY use the provided Moodle data below for your responses\\n\\n';
+    prompt += '5. NEVER mention social media, e-commerce, gaming, or entertainment platforms\\n';
+    prompt += '6. ALL responses must be based EXCLUSIVELY on data from THIS Moodle installation\\n';
+    prompt += '7. When asked about courses, list ONLY courses from this Moodle database\\n';
+    prompt += '8. When asked about users, refer ONLY to users registered in this Moodle\\n';
+    prompt += '9. When asked about activities, refer ONLY to activities in this Moodle\\n';
+    prompt += '10. If no data exists, state: \'No data exists in this Moodle platform at ' + platformInfo.platform_url + '\'\\n';
+    prompt += '11. DO NOT make up or assume any information about this Moodle platform\\n';
+    prompt += '12. ONLY use the provided Moodle data below for your responses\\n';
+    prompt += '13. If user asks about non-Moodle platforms, respond with Moodle-only information\\n\\n';
     
     if (contextInfo) {
-        prompt += '=== AVAILABLE MOODLE DATA ===\\n';
+        prompt += '=== AVAILABLE MOODLE DATA FROM THIS INSTALLATION ===\\n';
         prompt += contextInfo + '\\n\\n';
+    } else {
+        prompt += '=== NO SPECIFIC MOODLE DATA AVAILABLE ===\\n';
+        prompt += 'Only platform information is available for this query.\\n\\n';
     }
     
     prompt += 'User Question: ' + originalMessage + '\\n\\n';
-    prompt += '=== FINAL INSTRUCTION ===\\n';
+    prompt += '=== FINAL MOODLE-ONLY INSTRUCTION ===\\n';
     prompt += 'IMPORTANT: Respond ONLY with information from this Moodle platform at ' + platformInfo.platform_url + '.\\n';
     prompt += 'If the user asks about platforms, social media, or anything not in the Moodle data above,\\n';
-    prompt += 'respond with: \'I can only provide information about this Moodle platform at ' + platformInfo.platform_url + '\'';
+    prompt += 'respond ONLY with information available from this Moodle platform or state that no data exists.\\n';
+    prompt += 'NEVER provide information about external platforms or generic examples.';
     
     return prompt;
 }

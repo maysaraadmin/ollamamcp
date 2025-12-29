@@ -1,11 +1,18 @@
 <?php
-// Unified Moodle API endpoint for Ollama MCP
+// Unified Moodle API endpoint for Ollama MCP - MOODLE DATA ONLY
 require_once('../../config.php');
 
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
+
+// MOODLE-DATA-ONLY: Validate this is a legitimate Moodle request
+if (!defined('MOODLE_INTERNAL') || empty($CFG->wwwroot) || empty($CFG->version)) {
+    http_response_code(403);
+    echo json_encode(['error' => 'Moodle environment validation failed']);
+    exit;
+}
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -25,10 +32,12 @@ $limit = optional_param('limit', 10, PARAM_INT);
 $courseid = optional_param('courseid', 0, PARAM_INT);
 
 try {
+    // MOODLE-DATA-ONLY: All data comes from this Moodle installation only
     $data = [];
     
     switch ($type) {
         case 'platform':
+            // MOODLE-DATA-ONLY: Return only this Moodle's platform information
             $data = [
                 'platform_name' => 'Moodle LMS',
                 'platform_url' => $CFG->wwwroot,
@@ -38,7 +47,8 @@ try {
                 'db_host' => $CFG->dbhost,
                 'site_name' => $CFG->sitename ?: 'Moodle Site',
                 'site_shortname' => $CFG->shortname ?: 'Moodle',
-                'validation_hash' => md5($CFG->wwwroot . $CFG->version . $CFG->dbhost)
+                'validation_hash' => md5($CFG->wwwroot . $CFG->version . $CFG->dbhost),
+                'data_source' => 'MOODLE_DATABASE_ONLY'
             ];
             break;
             
@@ -140,7 +150,10 @@ try {
         'success' => true,
         'data' => $data,
         'timestamp' => time(),
-        'type' => $type
+        'type' => $type,
+        'moodle_only' => true,
+        'data_source' => 'THIS_MOODLE_INSTALLATION_ONLY',
+        'platform_url' => $CFG->wwwroot
     ]);
     
 } catch (Exception $e) {
