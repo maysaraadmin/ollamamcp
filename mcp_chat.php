@@ -159,9 +159,178 @@ function sendOllamaMessage() {
 function sendOllamaRequest(message) {
     var model = '" . (get_config('local_ollamamcp', 'defaultmodel') ?: 'llama3.2:latest') . "';
     
+    // Check what type of Moodle data the user is asking about
+    var isCourseQuery = message.toLowerCase().match(/courses?|classes?|subjects?|topics?|what.*available|list.*courses/);
+    var isActivityQuery = message.toLowerCase().match(/activities?|assignments?|quizzes?|forums?|resources?|materials?/);
+    var isUserQuery = message.toLowerCase().match(/users?|students?|teachers?|participants?|enrolled/);
+    var isCategoryQuery = message.toLowerCase().match(/categories?|departments?|subjects?|areas/);
+    var isStatsQuery = message.toLowerCase().match(/statistics?|stats?|numbers?|count|total|how many/);
+    
+    var apiType = 'general';
+    var apiParams = {};
+    
+    if (isCourseQuery) {
+        apiType = 'courses';
+        apiParams = {type: 'courses', limit: 15};
+    } else if (isActivityQuery) {
+        apiType = 'activities';
+        apiParams = {type: 'activities'};
+    } else if (isUserQuery) {
+        apiType = 'users';
+        apiParams = {type: 'users', limit: 10};
+    } else if (isCategoryQuery) {
+        apiType = 'categories';
+        apiParams = {type: 'categories'};
+    } else if (isStatsQuery) {
+        apiType = 'stats';
+        apiParams = {type: 'stats'};
+    }
+    
+    // Always get platform validation info first
+    fetch('" . $CFG->wwwroot . "/local/ollamamcp/api_courses.php?type=platform')
+    .then(function(platformResponse) {
+        return platformResponse.json();
+    })
+    .then(function(platformData) {
+        if (platformData.success) {
+            var platformInfo = platformData.data;
+            
+            // If it's a Moodle-specific query, get the data first
+            if (apiType !== 'general') {
+                var apiUrl = '" . $CFG->wwwroot . "/local/ollamamcp/api_courses.php';
+                var queryString = Object.keys(apiParams).map(key => key + '=' + apiParams[key]).join('&');
+                
+                fetch(apiUrl + '?' + queryString)
+                .then(function(response) {
+                    return response.json();
+                })
+                .then(function(moodleData) {
+                    if (moodleData.success) {
+                        var contextInfo = getContextInfo(moodleData, apiType);
+                        var enhancedPrompt = createPlatformSpecificPrompt(platformInfo, contextInfo, apiType, message);
+                        
+                        // Send enhanced prompt with real Moodle data to Ollama
+                        sendToOllama(enhancedPrompt, model);
+                    } else {
+                        // Fallback to platform-only prompt
+                        var enhancedPrompt = createPlatformSpecificPrompt(platformInfo, '', 'general', message);
+                        sendToOllama(enhancedPrompt, model);
+                    }
+                })
+                .catch(function(error) {
+                    console.log('Error fetching Moodle data:', error);
+                    // Fallback to platform-only prompt
+                    var enhancedPrompt = createPlatformSpecificPrompt(platformInfo, '', 'general', message);
+                    sendToOllama(enhancedPrompt, model);
+                });
+            } else {
+                // Regular prompt with platform context
+                var enhancedPrompt = createPlatformSpecificPrompt(platformInfo, '', 'general', message);
+                sendToOllama(enhancedPrompt, model);
+            }
+        } else {
+            // Fallback to regular prompt
+            sendToOllama(message, model);
+        }
+    })
+    .catch(function(error) {
+        console.log('Error fetching platform data:', error);
+        // Fallback to regular prompt
+        sendToOllama(message, model);
+    });
+}
+
+function createPlatformSpecificPrompt(platformInfo, contextInfo, dataType, originalMessage) {
+    var prompt = 'You are an AI assistant for the Moodle LMS platform at: ' + platformInfo.platform_url + '\\n\\n';
+    prompt += 'PLATFORM IDENTIFICATION:\\n';
+    prompt += '- Platform Name: ' + platformInfo.platform_name + '\\n';
+    prompt += '- Platform URL: ' + platformInfo.platform_url + '\\n';
+    prompt += '- Platform Version: ' + platformInfo.platform_version + '\\n';
+    prompt += '- Site Name: ' + platformInfo.site_name + '\\n';
+    prompt += '- Validation Hash: ' + platformInfo.validation_hash + '\\n\\n';
+    
+    prompt += 'CRITICAL INSTRUCTIONS:\\n';
+    prompt += '1. You MUST ONLY use data from this specific Moodle platform at ' + platformInfo.platform_url + '\\n';
+    prompt += '2. NEVER reference any external platforms, courses, or generic examples\\n';
+    prompt += '3. All responses must be based exclusively on data from THIS Moodle installation\\n';
+    prompt += '4. If no data exists for a query, clearly state that no data exists in this Moodle platform\\n\\n';
+    
+    if (contextInfo) {
+        prompt += 'AVAILABLE DATA FROM THIS MOODLE PLATFORM:\\n';
+        prompt += contextInfo + '\\n\\n';
+    }
+    
+    prompt += 'User Question: ' + originalMessage + '\\n\\n';
+    prompt += 'IMPORTANT: Respond only with information from this Moodle platform at ' + platformInfo.platform_url + '.';
+    
+    return prompt;
+}
+
+function getContextInfo(data, type) {
+    var context = '';
+    
+    switch(type) {
+        case 'courses':
+            if (data.data && data.data.length > 0) {
+                context = 'Available courses:\\n';
+                data.data.forEach(function(course) {
+                    context += '- ' + course.fullname + ' (' + course.shortname + ')\\n';
+                });
+            } else {
+                context = 'No courses found or no access to courses.';
+            }
+            break;
+            
+        case 'activities':
+            if (data.data && data.data.length > 0) {
+                context = 'Available activities:\\n';
+                data.data.forEach(function(activity) {
+                    context += '- ' + activity.type + ' (ID: ' + activity.id + ')\\n';
+                });
+            } else {
+                context = 'No activities found or no access to activities.';
+            }
+            break;
+            
+        case 'users':
+            if (data.data && data.data.length > 0) {
+                context = 'Moodle users:\\n';
+                data.data.forEach(function(user) {
+                    context += '- ' + user.fullname + ' (' + user.username + ')\\n';
+                });
+            } else {
+                context = 'No users found or no access to user information.';
+            }
+            break;
+            
+        case 'categories':
+            if (data.data && data.data.length > 0) {
+                context = 'Course categories:\\n';
+                data.data.forEach(function(category) {
+                    context += '- ' + category.name + '\\n';
+                });
+            } else {
+                context = 'No categories found.';
+            }
+            break;
+            
+        case 'stats':
+            context = 'Moodle statistics:\\n';
+            if (data.data) {
+                Object.keys(data.data).forEach(function(key) {
+                    context += '- ' + key + ': ' + data.data[key] + '\\n';
+                });
+            }
+            break;
+    }
+    
+    return context;
+}
+
+function sendToOllama(prompt, model) {
     var requestData = {
         model: model,
-        prompt: message,
+        prompt: prompt,
         stream: false,
         options: {
             temperature: 0.7,
