@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<XMLDB xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="../../lib/xmldb/xmldb.xsd"
+    comment="Initial database schema for Ollama MCP plugin">
+  <TABLES>
+    <TABLE name="local_ollamamcp_chats" comment="Chat conversations storage">
+      <FIELDS>
+        <FIELD name="id" type="int" length="10" unsigned="true" sequence="true" comment="Primary key"/>
+        <FIELD name="userid" type="int" length="10" unsigned="true" notnull="true" sequence="false" comment="User ID"/>
+        <FIELD name="courseid" type="int" length="10" unsigned="true" notnull="true" default="0" sequence="false" comment="Course ID (0 for system context)"/>
+        <FIELD name="session_id" type="char" length="255" notnull="true" sequence="false" comment="Chat session identifier"/>
+        <FIELD name="message_type" type="char" length="10" notnull="true" sequence="false" comment="Message type: user or assistant"/>
+        <FIELD name="message" type="text" size="big" notnull="true" sequence="false" comment="Message content"/>
+        <FIELD name="context_data" type="text" size="medium" notnull="false" sequence="false" comment="Moodle context data used for response"/>
+        <FIELD name="model_used" type="char" length="100" notnull="false" sequence="false" comment="Ollama model used"/>
+        <FIELD name="response_time" type="int" length="10" unsigned="true" notnull="false" default="0" sequence="false" comment="Response time in milliseconds"/>
+        <FIELD name="tokens_used" type="int" length="10" unsigned="true" notnull="false" default="0" sequence="false" comment="Number of tokens used"/>
+        <FIELD name="timecreated" type="int" length="10" unsigned="true" notnull="true" sequence="false" comment="Time created"/>
+        <FIELD name="timemodified" type="int" length="10" unsigned="true" notnull="true" sequence="false" comment="Time modified"/>
+      </FIELDS>
+      <KEYS>
+        <KEY name="primary" type="primary" fields="id"/>
+        <KEY name="userid" type="foreign" fields="userid" reftable="user" reffields="id"/>
+        <KEY name="courseid" type="foreign" fields="courseid" reftable="course" reffields="id"/>
+        <KEY name="session" type="unique" fields="session_id, userid, timecreated"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX name="timecreated" unique="false" fields="timecreated"/>
+        <INDEX name="userid_course" unique="false" fields="userid, courseid"/>
+      </INDEXES>
+    </TABLE>
+  </TABLES>
+</XMLDB>

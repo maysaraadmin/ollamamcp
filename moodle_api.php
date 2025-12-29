@@ -1,6 +1,7 @@
 <?php
 // Unified Moodle API endpoint for Ollama MCP - MOODLE DATA ONLY
 require_once('../../config.php');
+global $CFG, $DB;
 
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
@@ -53,7 +54,6 @@ try {
             break;
             
         case 'courses':
-            global $DB;
             $courses = $DB->get_records('course', ['visible' => 1], 'fullname ASC', 'id, fullname, shortname, summary', 0, $limit);
             $data = [];
             foreach ($courses as $course) {
@@ -69,7 +69,6 @@ try {
             break;
             
         case 'activities':
-            global $DB;
             if ($courseid > 0) {
                 $activities = $DB->get_records('course_modules', ['course' => $courseid], 'id ASC', 'id, module, instance', 0, $limit);
                 $data = [];
@@ -89,7 +88,6 @@ try {
             break;
             
         case 'users':
-            global $DB;
             if ($courseid > 0) {
                 // Get enrolled users for specific course
                 $context = context_course::instance($courseid);
@@ -110,7 +108,6 @@ try {
             break;
             
         case 'categories':
-            global $DB;
             $categories = $DB->get_records('course_categories', ['visible' => 1], 'name ASC', 'id, name, description', 0, $limit);
             $data = [];
             foreach ($categories as $category) {
@@ -123,7 +120,6 @@ try {
             break;
             
         case 'stats':
-            global $DB;
             $data = [
                 'total_courses' => $DB->count_records('course', ['visible' => 1]) - 1, // Exclude site course
                 'total_users' => $DB->count_records('user', ['deleted' => 0, 'suspended' => 0]),
