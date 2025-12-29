@@ -28,110 +28,88 @@ if ($courseid > 0) {
 }
 
 echo $OUTPUT->header();
-echo $OUTPUT->heading('MCP AI Assistant Chat');
+echo $OUTPUT->heading('Ollama AI Assistant Chat');
 
-// MCP Server status
-echo $OUTPUT->heading('MCP Server Status', 3);
+// Ollama Server status
+echo $OUTPUT->heading('Ollama Server Status', 3);
 
-$mcp_host = '127.0.0.1';
-$mcp_ports = [8080, 8081, 8082];
+$ollama_url = get_config('local_ollamamcp', 'ollamaserver') ?: 'http://localhost:11434';
 
 echo html_writer::start_div('row mb-3');
 echo html_writer::start_div('col-md-12');
 echo html_writer::start_div('card');
-echo html_writer::div('MCP Server Connection', 'card-header');
+echo html_writer::div('Ollama Server Connection', 'card-header');
 echo html_writer::start_div('card-body');
 
-echo html_writer::tag('p', 'The chat interface connects to the MCP server using the Model Context Protocol.');
-echo html_writer::tag('p', 'Make sure the MCP server is running before using the chat.');
+echo html_writer::tag('p', 'The chat interface connects directly to the Ollama server for AI responses.');
+echo html_writer::tag('p', 'Make sure Ollama is running on ' . html_writer::tag('code', $ollama_url) . ' before using the chat.');
 
-// Server startup instructions
+// Ollama server info
 echo html_writer::start_div('alert alert-info');
-echo html_writer::tag('h5', 'Start MCP Server:');
-echo html_writer::tag('code', 'cd c:\wamp64\www\robot\local\ollamamcp') . html_writer::empty_tag('br');
-echo html_writer::tag('code', 'C:\wamp64\bin\php\php8.3.14\php.exe cli/start_mcp_server.php --host=localhost --port=8080 --model=llama3.2:latest') . html_writer::empty_tag('br');
-echo html_writer::tag('small', 'Server will start on port 8080 and listen for MCP connections');
+echo html_writer::tag('h5', 'Ollama Server Information:');
+echo html_writer::tag('p', 'Server URL: ' . html_writer::tag('code', $ollama_url));
+echo html_writer::tag('p', 'Default Model: ' . html_writer::tag('code', get_config('local_ollamamcp', 'defaultmodel') ?: 'llama3.2:latest'));
+echo html_writer::tag('small', 'The plugin connects directly to Ollama REST API');
 echo html_writer::end_div();
 
 echo html_writer::start_div('d-flex gap-2');
-echo html_writer::link('javascript:void(0)', html_writer::tag('button', 'Check MCP Server', ['class' => 'btn btn-primary', 'onclick' => 'checkMCPServer()']));
+echo html_writer::link('javascript:void(0)', html_writer::tag('button', 'Check Ollama Server', ['class' => 'btn btn-primary', 'onclick' => 'checkOllamaServer()']));
 echo html_writer::end_div();
 
-echo html_writer::div('', 'alert alert-info mt-3', ['id' => 'mcp-status', 'style' => 'display:none;']);
+echo html_writer::div('', 'alert alert-info mt-3', ['id' => 'ollama-status', 'style' => 'display:none;']);
 
 echo html_writer::end_div(); // card-body
 echo html_writer::end_div(); // card
 echo html_writer::end_div(); // col
 echo html_writer::end_div(); // row
 
-// JavaScript for MCP server status check
+// JavaScript for Ollama server status check
 $PAGE->requires->js_init_code("
-    function checkMCPServer() {
-        var statusDiv = document.getElementById('mcp-status');
+    function checkOllamaServer() {
+        var statusDiv = document.getElementById('ollama-status');
         statusDiv.style.display = 'block';
         statusDiv.className = 'alert alert-info mt-3';
-        statusDiv.innerHTML = '<div class=\"spinner-border spinner-border-sm me-2\" role=\"status\"></div>Checking MCP server...';
+        statusDiv.innerHTML = '<div class=\"spinner-border spinner-border-sm me-2\" role=\"status\"></div>Checking Ollama server...';
         
-        // Check multiple ports for MCP server
-        var ports = [8080, 8081, 8082];
-        var checkedPorts = 0;
-        var serverFound = false;
+        var ollamaUrl = '" . $ollama_url . "';
         
-        function checkPort(port) {
-            // Use WebSocket-like connection for MCP protocol
-            var controller = new AbortController();
-            var timeoutId = setTimeout(function() {
-                controller.abort();
-            }, 3000);
-            
-            fetch('http://127.0.0.1:' + port, {
-                method: 'HEAD',
-                mode: 'no-cors',
-                signal: controller.signal
-            }).then(function(response) {
-                if (!serverFound) {
-                    serverFound = true;
-                    statusDiv.className = 'alert alert-success mt-3';
-                    statusDiv.innerHTML = '✅ <strong>MCP Server is running on port ' + port + '</strong><br><small>Ready for MCP protocol connections.</small>';
-                }
-                checkedPorts++;
-                if (checkedPorts === ports.length && !serverFound) {
-                    statusDiv.className = 'alert alert-warning mt-3';
-                    statusDiv.innerHTML = '⚠️ <strong>MCP Server is not running</strong><br><small>Please start the MCP server using the command above.</small>';
-                }
-            }).catch(function(error) {
-                checkedPorts++;
-                if (checkedPorts === ports.length && !serverFound) {
-                    statusDiv.className = 'alert alert-warning mt-3';
-                    statusDiv.innerHTML = '⚠️ <strong>MCP Server is not running</strong><br><small>Please start the MCP server using the command above.</small>';
-                }
-            }).finally(function() {
-                clearTimeout(timeoutId);
-            });
-        }
-        
-        // Check all ports
-        ports.forEach(checkPort);
+        // Check Ollama API /api/tags endpoint
+        fetch(ollamaUrl + '/api/tags', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        }).then(function(response) {
+            if (response.ok) {
+                statusDiv.className = 'alert alert-success mt-3';
+                statusDiv.innerHTML = '✅ <strong>Ollama Server is running</strong><br><small>Connected to ' + ollamaUrl + ' and API is responding.</small>';
+            } else {
+                throw new Error('HTTP ' + response.status);
+            }
+        }).catch(function(error) {
+            statusDiv.className = 'alert alert-warning mt-3';
+            statusDiv.innerHTML = '⚠️ <strong>Ollama Server is not running</strong><br><small>Could not connect to ' + ollamaUrl + '<br>Please start Ollama server: <code>ollama serve</code></small>';
+        });
     }
     
     // Auto-check status when page loads
     document.addEventListener('DOMContentLoaded', function() {
-        setTimeout(checkMCPServer, 1000);
+        setTimeout(checkOllamaServer, 1000);
     });
 ");
 
 echo html_writer::tag('hr', '');
 
-// Display MCP AI assistant interface
-echo html_writer::start_div('mcp-chat-section');
-echo html_writer::tag('h4', 'MCP AI Assistant Chat');
+// Display Ollama AI assistant interface
+echo html_writer::start_div('ollama-chat-section');
+echo html_writer::tag('h4', 'Ollama AI Assistant Chat');
 echo html_writer::start_div('chat-container', ['style' => 'border: 1px solid #ddd; border-radius: 8px; height: 500px; display: flex; flex-direction: column; font-family: Arial, sans-serif; margin-bottom: 20px;']);
 
 // Chat messages area
 echo html_writer::start_div('chat-messages', ['id' => 'chat-messages', 'style' => 'flex: 1; padding: 15px; overflow-y: auto; background: #fff; border-bottom: 1px solid #ddd;']);
 echo html_writer::start_div('message assistant', ['style' => 'margin-bottom: 15px; display: flex;']);
 echo html_writer::start_div('message-content', ['style' => 'max-width: 70%; padding: 10px 15px; border-radius: 15px; background: #e9ecef;']);
-echo html_writer::tag('div', 'Hello! I\'m your MCP AI assistant. I connect directly to the MCP server for AI-powered responses.');
+echo html_writer::tag('div', 'Hello! I\'m your Ollama AI assistant. I connect directly to the Ollama server for AI-powered responses.');
 echo html_writer::end_div(); // message-content
 echo html_writer::end_div(); // message
 echo html_writer::end_div(); // chat-messages
@@ -147,27 +125,25 @@ echo html_writer::tag('textarea', '', [
 echo html_writer::tag('button', 'Send', [
     'id' => 'send-message',
     'class' => 'btn btn-primary',
-    'onclick' => 'sendMCPMessage()',
+    'onclick' => 'sendOllamaMessage()',
     'style' => 'align-self: flex-end; padding: 10px 20px;'
 ]);
 echo html_writer::end_div(); // chat-input
 echo html_writer::end_div(); // chat-container
-echo html_writer::end_div(); // mcp-chat-section
+echo html_writer::end_div(); // ollama-chat-section
 
-// MCP JavaScript for direct socket communication
+// Ollama JavaScript for direct API communication
 echo html_writer::start_tag('script');
 echo "
-var mcpPort = 8080;
-var mcpHost = '127.0.0.1';
-var messageId = 1;
+var ollamaUrl = '" . $ollama_url . "';
 
-function sendMCPMessage() {
+function sendOllamaMessage() {
     var input = document.getElementById('chat-input');
     var message = input.value.trim();
     
     if (!message) return;
     
-    console.log('Sending MCP message:', message);
+    console.log('Sending Ollama message:', message);
     
     // Add user message
     addMessage(message, 'user');
@@ -176,68 +152,64 @@ function sendMCPMessage() {
     // Show typing indicator
     addMessage('...', 'assistant typing');
     
-    // Send to MCP server using WebSocket-like connection
-    sendMCPRequest(message);
+    // Send to Ollama API
+    sendOllamaRequest(message);
 }
 
-function sendMCPRequest(message) {
-    // Create MCP JSON-RPC request
-    var mcpRequest = {
-        jsonrpc: '2.0',
-        id: messageId++,
-        method: 'tools/call',
-        params: {
-            name: 'ollama_chat',
-            arguments: {
-                prompt: message,
-                context: []
-            }
+function sendOllamaRequest(message) {
+    var model = '" . (get_config('local_ollamamcp', 'defaultmodel') ?: 'llama3.2:latest') . "';
+    
+    var requestData = {
+        model: model,
+        prompt: message,
+        stream: false,
+        options: {
+            temperature: 0.7,
+            top_p: 0.9,
+            num_predict: 500
         }
     };
     
-    console.log('MCP Request:', mcpRequest);
+    console.log('Ollama Request:', requestData);
     
-    // Send to MCP HTTP bridge instead of direct socket
-    fetch('" . $CFG->wwwroot . "/local/ollamamcp/mcp_http_bridge.php', {
+    // Send to Ollama API directly
+    fetch(ollamaUrl + '/api/generate', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify(mcpRequest)
+        body: JSON.stringify(requestData)
     })
     .then(function(response) {
-        console.log('MCP Response status:', response.status);
+        console.log('Ollama Response status:', response.status);
         return response.json();
     })
     .then(function(data) {
-        console.log('MCP Response data:', data);
+        console.log('Ollama Response data:', data);
         
         // Remove typing indicator
         var typingMsg = document.querySelector('.message.typing');
         if (typingMsg) typingMsg.remove();
         
-        if (data.result && data.result.content && data.result.content[0]) {
-            addMessage(data.result.content[0].text, 'assistant');
+        if (data.response) {
+            addMessage(data.response, 'assistant');
         } else if (data.error) {
-            var errorMsg = 'MCP Error: ' + data.error.message;
-            if (data.error.code) {
-                errorMsg += ' (Code: ' + data.error.code + ')';
-            }
+            var errorMsg = 'Ollama Error: ' + data.error;
             addMessage(errorMsg, 'assistant');
             console.log('Full error details:', data.error);
         } else {
-            addMessage('Received MCP response but format was unexpected', 'assistant');
+            addMessage('Received Ollama response but format was unexpected', 'assistant');
             console.log('Unexpected response format:', data);
         }
     })
     .catch(function(error) {
-        console.log('MCP Error:', error);
+        console.log('Ollama Error:', error);
         
         // Remove typing indicator
         var typingMsg = document.querySelector('.message.typing');
         if (typingMsg) typingMsg.remove();
         
-        addMessage('MCP Connection Error: ' + error.message, 'assistant');
+        addMessage('Ollama Connection Error: ' + error.message, 'assistant');
     });
 }
 
@@ -265,7 +237,7 @@ document.addEventListener('DOMContentLoaded', function() {
         input.addEventListener('keypress', function(e) {
             if (e.which === 13 && !e.shiftKey) {
                 e.preventDefault();
-                sendMCPMessage();
+                sendOllamaMessage();
             }
         });
     }

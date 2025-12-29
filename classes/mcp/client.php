@@ -102,13 +102,14 @@ class client {
         curl_setopt_array($curl, [
             CURLOPT_URL => $url,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => $this->timeout,
-            CURLOPT_CONNECTTIMEOUT => 10,  // Connection timeout
+            CURLOPT_TIMEOUT => 180,  // Force 3 minutes timeout
+            CURLOPT_CONNECTTIMEOUT => 15,  // Connection timeout
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_SSL_VERIFYPEER => false,
             CURLOPT_SSL_VERIFYHOST => false,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_MAXREDIRS => 3,
+            CURLOPT_NOSIGNAL => 1,  // Prevent timeouts from being affected by signals
         ]);
         
         if ($method === 'POST') {
