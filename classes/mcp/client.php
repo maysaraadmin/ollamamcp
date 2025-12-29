@@ -11,7 +11,7 @@ class client {
     public function __construct() {
         $this->serverurl = get_config('local_ollamamcp', 'ollamaserver') ?: 'http://localhost:11434';
         $this->apikey = get_config('local_ollamamcp', 'apikey');
-        $this->timeout = get_config('local_ollamamcp', 'timeout') ?: 60;
+        $this->timeout = get_config('local_ollamamcp', 'timeout') ?: 120;  // Increased to 120 seconds
     }
     
     public function generate_completion($prompt, $model = null, $options = []) {
@@ -21,14 +21,28 @@ class client {
         
         $url = $this->serverurl . '/api/generate';
         
+        // Get current user context for the prompt
+        global $USER, $CFG;
+        $user_context = '';
+        if (isset($USER->id) && $USER->id > 0) {
+            $user_context = "Current Moodle User: ID={$USER->id}, Username={$USER->username}, Email={$USER->email}. ";
+        }
+        
+        // Enhanced prompt with Moodle context
+        $enhanced_prompt = $user_context . "You are an AI assistant integrated with Moodle LMS. " .
+                          "When users ask about identity or current user, provide the Moodle user information above. " .
+                          "Be helpful and concise. User message: " . $prompt;
+        
         $data = [
             'model' => $model,
-            'prompt' => $prompt,
+            'prompt' => $enhanced_prompt,
             'stream' => false,
             'options' => [
-                'num_predict' => 500,  // Limit response length for faster response
-                'temperature' => 0.7,
-                'top_p' => 0.9
+                'num_predict' => 300,  // Reduced for faster response
+                'temperature' => 0.3,  // Lower temperature for more deterministic responses
+                'top_p' => 0.8,
+                'repeat_penalty' => 1.1,
+                'stop' => ['\n', 'User:', 'Assistant:']  // Stop early to prevent rambling
             ]
         ];
         
@@ -89,9 +103,12 @@ class client {
             CURLOPT_URL => $url,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => $this->timeout,
+            CURLOPT_CONNECTTIMEOUT => 10,  // Connection timeout
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_SSL_VERIFYPEER => false,
             CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 3,
         ]);
         
         if ($method === 'POST') {

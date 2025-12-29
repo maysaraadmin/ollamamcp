@@ -360,7 +360,7 @@ class server {
      * @return array Response
      */
     private function call_moodle_info($arguments, $id) {
-        global $CFG, $USER;
+        global $CFG;
         
         $type = $arguments['type'] ?? 'general';
         $info = [];
@@ -378,10 +378,13 @@ class server {
                 break;
                 
             case 'user':
+                // MCP server runs standalone, so no logged-in user context
+                // Return system user info or require authentication
                 $info = [
-                    'id' => $USER->id,
-                    'username' => $USER->username,
-                    'email' => $USER->email
+                    'id' => 0,
+                    'username' => 'system',
+                    'email' => 'mcp-server@localhost',
+                    'note' => 'MCP server runs in standalone mode without user session'
                 ];
                 break;
                 
@@ -390,7 +393,9 @@ class server {
                 $info = [
                     'moodle_version' => $CFG->version,
                     'wwwroot' => $CFG->wwwroot,
-                    'plugin_version' => get_config('local_ollamamcp', 'version') ?: '0.1.0'
+                    'plugin_version' => get_config('local_ollamamcp', 'version') ?: '0.1.0',
+                    'mcp_mode' => 'standalone_server',
+                    'note' => 'MCP server operates independently of Moodle sessions'
                 ];
                 break;
         }
