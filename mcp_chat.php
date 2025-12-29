@@ -19,12 +19,28 @@ if ($courseid > 0) {
     // System context - no specific course
     require_login();
     $context = context_system::instance();
-    require_capability('moodle/site:config', $context);
-    
+    require_capability('local/ollamamcp:use', $context);
+
     $PAGE->set_url('/local/ollamamcp/mcp_chat.php');
     $PAGE->set_context($context);
-    $PAGE->set_title(get_string('pluginname', 'local_ollamamcp'));
-    $PAGE->set_heading(get_string('pluginname', 'local_ollamamcp'));
+    $PAGE->set_title('Ollama MCP - AI Assistant');
+    $PAGE->set_heading('AI Assistant');
+
+    // Check if plugin is enabled
+    if (!get_config('local_ollamamcp', 'enabled')) {
+        echo $OUTPUT->header();
+        echo $OUTPUT->notification('Plugin is disabled', 'error');
+        echo $OUTPUT->footer();
+        exit;
+    }
+
+    // Check if web services are enabled
+    if (!get_config('core', 'enablewebservices')) {
+        echo $OUTPUT->header();
+        echo $OUTPUT->notification('Web services are not enabled', 'error');
+        echo $OUTPUT->footer();
+        exit;
+    }
 }
 
 echo $OUTPUT->header();

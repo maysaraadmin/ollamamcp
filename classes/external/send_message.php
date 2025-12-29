@@ -44,12 +44,12 @@ class send_message extends \external_api {
         
         // Check if plugin is enabled
         if (!get_config('local_ollamamcp', 'enabled')) {
-            throw new \moodle_exception('plugindisabled', 'local_ollamamcp');
+            throw new \Exception('Plugin is disabled');
         }
         
         try {
-            // Use the API class with generate endpoint (faster)
-            $api = new \local_ollamamcp\api();
+            // Use API class with generate endpoint (faster)
+            $api = new \local_ollamamcp\mcp\client();
             $response = $api->generate_completion($message);
             
             return [
@@ -57,7 +57,7 @@ class send_message extends \external_api {
             ];
             
         } catch (\Exception $e) {
-            // Log the actual error for debugging
+            // Log actual error for debugging
             debugging('AI Assistant Error: ' . $e->getMessage(), DEBUG_DEVELOPER);
             
             // Return user-friendly error message

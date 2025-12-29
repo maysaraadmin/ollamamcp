@@ -9,9 +9,32 @@ class client {
     private $timeout;
     
     public function __construct() {
+        global $CFG;
+        
+        // Check if plugin and web services are enabled
+        if (!get_config('local_ollamamcp', 'enabled')) {
+            debugging('Plugin is disabled', DEBUG_DEVELOPER, 'local_ollamamcp');
+            throw new \Exception('Plugin is disabled');
+        }
+        
+        if (!get_config('core', 'enablewebservices')) {
+            debugging('Web services are not enabled', DEBUG_DEVELOPER, 'local_ollamamcp');
+            throw new \Exception('Web services are not enabled');
+        }
+        
         $this->serverurl = get_config('local_ollamamcp', 'ollamaserver') ?: 'http://localhost:11434';
         $this->apikey = get_config('local_ollamamcp', 'apikey');
-        $this->timeout = get_config('local_ollamamcp', 'timeout') ?: 120;  // Increased to 120 seconds
+        $this->timeout = get_config('local_ollamamcp', 'timeout') ?: 120;
+        
+        // Validate server URL
+        if (!function_exists('local_ollamamcp_validate_server_url')) {
+            require_once(dirname(__DIR__).'/../../lib.php');
+        }
+        
+        if (!local_ollamamcp_validate_server_url($this->serverurl)) {
+            debugging('Invalid Ollama server URL: '.$this->serverurl, DEBUG_DEVELOPER, 'local_ollamamcp');
+            throw new \Exception('Invalid Ollama server URL');
+        }
     }
     
     public function generate_completion($prompt, $model = null, $options = []) {
@@ -215,13 +238,12 @@ class client {
                 return $users;
                 
             } catch (Exception $e) {
-                // Fallback - return empty array for course-specific users
+                debugging('Error getting course users: ' . $e->getMessage(), DEBUG_DEVELOPER, 'local_ollamamcp');
                 return [];
             }
         } else {
             // Get all active users (limited) - use simple approach
             try {
-                // Use Moodle's get_records function instead of SQL
                 $users = $DB->get_records('user', ['deleted' => 0, 'suspended' => 0], 'id DESC', '*', 0, $limit);
                 
                 $user_list = [];
@@ -238,7 +260,7 @@ class client {
                 return $user_list;
                 
             } catch (Exception $e) {
-                // If all else fails, return a simple test user
+                debugging('Error getting users: ' . $e->getMessage(), DEBUG_DEVELOPER, 'local_ollamamcp');
                 return [
                     [
                         'id' => 2,
@@ -298,8 +320,8 @@ class client {
             'platform_release' => $CFG->release,
             'db_type' => $CFG->dbtype,
             'db_host' => $CFG->dbhost,
-            'site_name' => get_config('site', 'fullname'),
-            'site_shortname' => get_config('site', 'shortname'),
+            'site_name' => $CFG->sitename ?: 'Moodle Site',
+            'site_shortname' => $CFG->shortname ?: 'Moodle',
             'validation_hash' => md5($CFG->wwwroot . $CFG->version . $CFG->dbhost)
         ];
         
@@ -403,16 +425,19 @@ class client {
         curl_close($curl);
         
         if ($error) {
-            throw new \Exception("cURL Error (HTTP $http_code): $error");
+            debugging("cURL Error (HTTP $http_code): $error", DEBUG_DEVELOPER, 'local_ollamamcp');
+            return false;
         }
         
         if ($http_code !== 200) {
-            throw new \Exception("HTTP Error: $http_code - Response: " . substr($response, 0, 200));
+            debugging("HTTP Error: $http_code - Response: " . substr($response, 0, 200), DEBUG_DEVELOPER, 'local_ollamamcp');
+            return false;
         }
         
         $decoded = json_decode($response, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new \Exception('JSON Error: ' . json_last_error_msg() . ' - Response: ' . substr($response, 0, 200));
+            debugging('JSON Error: ' . json_last_error_msg() . ' - Response: ' . substr($response, 0, 200), DEBUG_DEVELOPER, 'local_ollamamcp');
+            return false;
         }
         
         return $decoded;

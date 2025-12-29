@@ -340,7 +340,7 @@ echo html_writer::start_div('card-body');
 
 echo html_writer::tag('h4', 'Test the AI Assistant');
 echo html_writer::tag('p', 'Once the web service is set up, you can test the AI assistant:');
-echo html_writer::link('/local/ollamamcp/', html_writer::tag('button', 'Open AI Assistant Chat', ['class' => 'btn btn-primary']));
+echo html_writer::link('./mcp_chat.php', html_writer::tag('button', 'Open AI Assistant Chat', ['class' => 'btn btn-primary']));
 
 echo html_writer::tag('h4', 'API Endpoint');
 echo html_writer::tag('p', 'Web service endpoint:');
