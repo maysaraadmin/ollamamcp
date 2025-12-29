@@ -1,6 +1,7 @@
 <?php
 require_once('../../config.php');
 require_once($CFG->libdir.'/adminlib.php');
+require_once($CFG->libdir.'/weblib.php');
 
 // Set up page context
 require_login();
@@ -17,15 +18,17 @@ echo $OUTPUT->heading('Ollama MCP Web Service Management');
 
 // Handle actions
 $action = optional_param('action', '', PARAM_ALPHA);
+$message = '';
 
+// 1. Enable Web Services
 if ($action === 'enable_webservices') {
     set_config('enablewebservices', 1);
     set_config('webserviceprotocols', 'rest');
-    redirect($PAGE->url, 'Web services enabled');
+    $message = 'Web services and REST protocol enabled';
 }
 
+// 2. Register External Function
 if ($action === 'register_function') {
-    // Register external function
     $function = [
         'name' => 'local_ollamamcp_send_message',
         'classname' => 'local_ollamamcp\\external\\send_message',
@@ -40,13 +43,107 @@ if ($action === 'register_function') {
     if ($existing) {
         $function['id'] = $existing->id;
         $DB->update_record('external_functions', $function);
+        $message = 'External function updated';
     } else {
         $DB->insert_record('external_functions', $function);
+        $message = 'External function registered';
     }
-    redirect($PAGE->url, 'External function registered');
 }
 
+// 3. Create Web Service
 if ($action === 'create_service') {
+    $webservice = new stdClass();
+    $webservice->name = 'Ollama MCP Service';
+    $webservice->timecreated = time();
+    $webservice->timemodified = time();
+    $webservice->shortname = 'ollamamcp';
+    $webservice->enabled = 1;
+    $webservice->downloadfiles = 0;
+    $webservice->uploadfiles = 0;
+    $webservice->restrictedusers = 0;
+
+    $existing = $DB->get_record('external_services', ['shortname' => 'ollamamcp']);
+    if ($existing) {
+        $webservice->id = $existing->id;
+        $DB->update_record('external_services', $webservice);
+        $message = 'Web service updated';
+    } else {
+        $service_id = $DB->insert_record('external_services', $webservice);
+        $webservice->id = $service_id;
+        $message = 'Web service created';
+    }
+    
+    // Add function to service
+    $service_function = new stdClass();
+    $service_function->externalserviceid = $webservice->id;
+    $service_function->functionname = 'local_ollamamcp_send_message';
+
+    $existing_func = $DB->get_record('external_services_functions', [
+        'externalserviceid' => $webservice->id,
+        'functionname' => 'local_ollamamcp_send_message'
+    ]);
+
+    if (!$existing_func) {
+        $DB->insert_record('external_services_functions', $service_function);
+    }
+}
+
+// 4. Create Web Service User and Token
+if ($action === 'create_token') {
+    $admin_user = $DB->get_record('user', ['username' => 'admin']);
+    if ($admin_user) {
+        // Get the web service
+        $webservice = $DB->get_record('external_services', ['shortname' => 'ollamamcp']);
+        
+        if ($webservice) {
+            // Check if token already exists
+            $existing_token = $DB->get_record_sql("
+                SELECT t.* FROM {external_tokens} t
+                JOIN {external_services} s ON t.externalserviceid = s.id
+                WHERE t.userid = ? AND s.shortname = ?
+            ", [$admin_user->id, 'ollamamcp']);
+            
+            if (!$existing_token) {
+                // Create token
+                $token = new stdClass();
+                $token->token = md5(uniqid('', true));
+                $token->externalserviceid = $webservice->id;
+                $token->userid = $admin_user->id;
+                $token->contextid = $context->id;
+                $token->creatorid = $admin_user->id;
+                $token->timecreated = time();
+                $token->tokentype = 0;
+                
+                $DB->insert_record('external_tokens', $token);
+                $message = 'Web service token created for admin user';
+            } else {
+                $message = 'Web service token already exists';
+            }
+            
+            // Authorize user for service
+            $auth = new stdClass();
+            $auth->externalserviceid = $webservice->id;
+            $auth->userid = $admin_user->id;
+            
+            $existing_auth = $DB->get_record('external_services_users', [
+                'externalserviceid' => $webservice->id,
+                'userid' => $admin_user->id
+            ]);
+            
+            if (!$existing_auth) {
+                $DB->insert_record('external_services_users', $auth);
+                $message .= ' and admin user authorized';
+            }
+        }
+    }
+}
+
+// 5. Complete Setup (all in one)
+if ($action === 'complete_setup') {
+    // Enable web services and REST protocol
+    set_config('enablewebservices', 1);
+    set_config('webserviceprotocols', 'rest');
+    
     // Create web service
     $webservice = new stdClass();
     $webservice->name = 'Ollama MCP Service';
@@ -57,7 +154,7 @@ if ($action === 'create_service') {
     $webservice->downloadfiles = 0;
     $webservice->uploadfiles = 0;
     $webservice->restrictedusers = 0;
-    
+
     $existing = $DB->get_record('external_services', ['shortname' => 'ollamamcp']);
     if ($existing) {
         $webservice->id = $existing->id;
@@ -68,341 +165,189 @@ if ($action === 'create_service') {
     }
     
     // Add function to service
-    $function = new stdClass();
-    $function->externalserviceid = $webservice->id;
-    $function->functionname = 'local_ollamamcp_send_message';
-    
+    $service_function = new stdClass();
+    $service_function->externalserviceid = $webservice->id;
+    $service_function->functionname = 'local_ollamamcp_send_message';
+
     $existing_func = $DB->get_record('external_services_functions', [
         'externalserviceid' => $webservice->id,
         'functionname' => 'local_ollamamcp_send_message'
     ]);
-    
+
     if (!$existing_func) {
-        $DB->insert_record('external_services_functions', $function);
+        $DB->insert_record('external_services_functions', $service_function);
     }
     
-    redirect($PAGE->url, 'Web service created');
-}
-
-if ($action === 'authorize_user') {
-    // Authorize admin user
+    // Register external function
+    $function = [
+        'name' => 'local_ollamamcp_send_message',
+        'classname' => 'local_ollamamcp\\external\\send_message',
+        'methodname' => 'execute',
+        'description' => 'Send message to AI assistant',
+        'type' => 'write',
+        'capabilities' => '',
+        'ajax' => true,
+    ];
+    
+    $existing_func = $DB->get_record('external_functions', ['name' => $function['name']]);
+    if ($existing_func) {
+        $function['id'] = $existing_func->id;
+        $DB->update_record('external_functions', $function);
+    } else {
+        $DB->insert_record('external_functions', $function);
+    }
+    
+    // Create token and authorize admin user
     $admin_user = $DB->get_record('user', ['username' => 'admin']);
     if ($admin_user) {
-        $service = $DB->get_record('external_services', ['shortname' => 'ollamamcp']);
+        $existing_token = $DB->get_record_sql("
+            SELECT t.* FROM {external_tokens} t
+            JOIN {external_services} s ON t.externalserviceid = s.id
+            WHERE t.userid = ? AND s.shortname = ?
+        ", [$admin_user->id, 'ollamamcp']);
         
-        if ($service) {
-            // Authorize user
-            $auth = new stdClass();
-            $auth->externalserviceid = $service->id;
-            $auth->userid = $admin_user->id;
+        if (!$existing_token) {
+            $token = new stdClass();
+            $token->token = md5(uniqid('', true));
+            $token->externalserviceid = $webservice->id;
+            $token->userid = $admin_user->id;
+            $token->contextid = $context->id;
+            $token->creatorid = $admin_user->id;
+            $token->timecreated = time();
+            $token->tokentype = 0;
             
-            $existing_auth = $DB->get_record('external_services_users', [
-                'externalserviceid' => $service->id,
-                'userid' => $admin_user->id
-            ]);
-            
-            if (!$existing_auth) {
-                $DB->insert_record('external_services_users', $auth);
-            }
-            
-            // Create token
-            $existing_token = $DB->get_record_sql("
-                SELECT t.* FROM {external_tokens} t
-                JOIN {external_services} s ON t.externalserviceid = s.id
-                WHERE t.userid = ? AND s.shortname = ?
-            ", [$admin_user->id, 'ollamamcp']);
-            
-            if (!$existing_token) {
-                $token = new stdClass();
-                $token->token = md5(uniqid('', true));
-                $token->externalserviceid = $service->id;
-                $token->userid = $admin_user->id;
-                $token->contextid = $context->id;
-                $token->creatorid = $admin_user->id;
-                $token->timecreated = time();
-                $token->tokentype = 0;
-                
-                $DB->insert_record('external_tokens', $token);
-            }
+            $DB->insert_record('external_tokens', $token);
+        }
+        
+        $auth = new stdClass();
+        $auth->externalserviceid = $webservice->id;
+        $auth->userid = $admin_user->id;
+        
+        $existing_auth = $DB->get_record('external_services_users', [
+            'externalserviceid' => $webservice->id,
+            'userid' => $admin_user->id
+        ]);
+        
+        if (!$existing_auth) {
+            $DB->insert_record('external_services_users', $auth);
         }
     }
-    redirect($PAGE->url, 'User authorized');
+    
+    $message = 'Complete web service setup finished successfully!';
 }
 
-// Current status
+// Display status message
+if ($message) {
+    echo html_writer::div($message, 'alert alert-success');
+}
+
+// Current Status Section
+echo html_writer::start_div('card');
+echo html_writer::div('Current Web Service Status', 'card-header');
+echo html_writer::start_div('card-body');
+
+// Check current status
 $ws_enabled = get_config('core', 'enablewebservices');
 $protocols = get_config('core', 'webserviceprotocols');
-$plugin_enabled = get_config('local_ollamamcp', 'enabled');
-$ollama_url = get_config('local_ollamamcp', 'ollamaserver') ?: 'http://localhost:11434';
-$default_model = get_config('local_ollamamcp', 'defaultmodel') ?: 'llama3.2:latest';
+$service = $DB->get_record('external_services', ['shortname' => 'ollamamcp']);
+$function = $DB->get_record('external_functions', ['name' => 'local_ollamamcp_send_message']);
+$token = $DB->get_record_sql("
+    SELECT t.* FROM {external_tokens} t
+    JOIN {external_services} s ON t.externalserviceid = s.id
+    WHERE s.shortname = ? AND t.userid = ?
+", ['ollamamcp', $USER->id]);
 
+echo html_writer::tag('h4', 'Web Service Configuration');
+echo html_writer::tag('p', 'Web services enabled: ' . ($ws_enabled ? html_writer::tag('span', '✅ Yes', ['style' => 'color: green;']) : html_writer::tag('span', '❌ No', ['style' => 'color: red;'])));
+echo html_writer::tag('p', 'Available protocols: ' . htmlspecialchars($protocols));
+
+echo html_writer::tag('h4', 'Ollama MCP Service');
+if ($service) {
+    echo html_writer::tag('p', 'Service: ' . html_writer::tag('span', '✅ ' . $service->name, ['style' => 'color: green;']));
+    echo html_writer::tag('p', 'Short name: ' . $service->shortname);
+    echo html_writer::tag('p', 'Status: ' . ($service->enabled ? 'Enabled' : 'Disabled'));
+    echo html_writer::tag('p', 'Created: ' . date('Y-m-d H:i:s', $service->timecreated));
+} else {
+    echo html_writer::tag('p', 'Service: ' . html_writer::tag('span', '❌ Not created', ['style' => 'color: red;']));
+}
+
+echo html_writer::tag('h4', 'External Function');
+if ($function) {
+    echo html_writer::tag('p', 'Function: ' . html_writer::tag('span', '✅ ' . $function->name, ['style' => 'color: green;']));
+    echo html_writer::tag('p', 'Class: ' . $function->classname);
+    echo html_writer::tag('p', 'Method: ' . $function->methodname);
+    echo html_writer::tag('p', 'AJAX: ' . ($function->ajax ? 'Yes' : 'No'));
+} else {
+    echo html_writer::tag('p', 'Function: ' . html_writer::tag('span', '❌ Not registered', ['style' => 'color: red;']));
+}
+
+echo html_writer::tag('h4', 'Web Service Token');
+if ($token) {
+    echo html_writer::tag('p', 'Token: ' . html_writer::tag('span', '✅ Created', ['style' => 'color: green;']));
+    echo html_writer::tag('p', 'Token ID: ' . $token->id);
+    echo html_writer::tag('p', 'Created: ' . date('Y-m-d H:i:s', $token->timecreated));
+    echo html_writer::tag('p', 'Token: ' . substr($token->token, 0, 20) . '...');
+} else {
+    echo html_writer::tag('p', 'Token: ' . html_writer::tag('span', '❌ Not created', ['style' => 'color: red;']));
+}
+
+echo html_writer::end_div(); // card-body
+echo html_writer::end_div(); // card
+
+// Action Buttons Section
+echo html_writer::start_div('card mt-4');
+echo html_writer::div('Web Service Actions', 'card-header');
+echo html_writer::start_div('card-body');
+
+echo html_writer::tag('h4', 'Quick Actions');
 echo html_writer::start_div('row');
-echo html_writer::start_div('col-md-12');
+echo html_writer::start_div('col-md-6 mb-2');
+echo html_writer::link($PAGE->url . '?action=enable_webservices', html_writer::tag('button', 'Enable Web Services', ['class' => 'btn btn-primary w-100']));
+echo html_writer::end_div();
+echo html_writer::start_div('col-md-6 mb-2');
+echo html_writer::link($PAGE->url . '?action=register_function', html_writer::tag('button', 'Register Function', ['class' => 'btn btn-info w-100']));
+echo html_writer::end_div();
+echo html_writer::end_div();
+echo html_writer::start_div('row');
+echo html_writer::start_div('col-md-6 mb-2');
+echo html_writer::link($PAGE->url . '?action=create_service', html_writer::tag('button', 'Create Service', ['class' => 'btn btn-warning w-100']));
+echo html_writer::end_div();
+echo html_writer::start_div('col-md-6 mb-2');
+echo html_writer::link($PAGE->url . '?action=create_token', html_writer::tag('button', 'Create Token', ['class' => 'btn btn-success w-100']));
+echo html_writer::end_div();
+echo html_writer::end_div();
 
-// Status Card
-echo html_writer::start_div('card mb-3');
-echo html_writer::div('Current Status', 'card-header');
-echo html_writer::start_div('card-body');
+echo html_writer::tag('hr', '');
 
-echo html_writer::start_tag('table', ['class' => 'table table-bordered']);
-echo html_writer::start_tag('tbody');
-
-echo html_writer::tag('tr', 
-    html_writer::tag('td', 'Plugin Enabled') . 
-    html_writer::tag('td', $plugin_enabled ? 
-        html_writer::tag('span', '✅ Yes', ['class' => 'badge bg-success']) : 
-        html_writer::tag('span', '❌ No', ['class' => 'badge bg-danger']))
+echo html_writer::tag('h4', 'Complete Setup');
+echo html_writer::tag('p', 'This will perform all the above steps in one operation:');
+echo html_writer::tag('ul', 
+    html_writer::tag('li', 'Enable web services and REST protocol') .
+    html_writer::tag('li', 'Create Ollama MCP web service') .
+    html_writer::tag('li', 'Register external function') .
+    html_writer::tag('li', 'Create web service token for admin user') .
+    html_writer::tag('li', 'Authorize admin user for the service')
 );
-
-echo html_writer::tag('tr', 
-    html_writer::tag('td', 'Web Services Enabled') . 
-    html_writer::tag('td', $ws_enabled ? 
-        html_writer::tag('span', '✅ Yes', ['class' => 'badge bg-success']) : 
-        html_writer::tag('span', '❌ No', ['class' => 'badge bg-danger']))
-);
-
-echo html_writer::tag('tr', 
-    html_writer::tag('td', 'REST Protocol') . 
-    html_writer::tag('td', strpos($protocols, 'rest') !== false ? 
-        html_writer::tag('span', '✅ Enabled', ['class' => 'badge bg-success']) : 
-        html_writer::tag('span', '❌ Disabled', ['class' => 'badge bg-danger']))
-);
-
-echo html_writer::tag('tr', 
-    html_writer::tag('td', 'External Function') . 
-    html_writer::tag('td', $DB->record_exists('external_functions', ['name' => 'local_ollamamcp_send_message']) ? 
-        html_writer::tag('span', '✅ Registered', ['class' => 'badge bg-success']) : 
-        html_writer::tag('span', '❌ Not registered', ['class' => 'badge bg-danger']))
-);
-
-echo html_writer::tag('tr', 
-    html_writer::tag('td', 'Web Service') . 
-    html_writer::tag('td', $DB->record_exists('external_services', ['shortname' => 'ollamamcp']) ? 
-        html_writer::tag('span', '✅ Created', ['class' => 'badge bg-success']) : 
-        html_writer::tag('span', '❌ Not created', ['class' => 'badge bg-danger']))
-);
-
-echo html_writer::tag('tr', 
-    html_writer::tag('td', 'Ollama URL') . 
-    html_writer::tag('td', html_writer::tag('code', $ollama_url))
-);
-
-echo html_writer::tag('tr', 
-    html_writer::tag('td', 'Default Model') . 
-    html_writer::tag('td', html_writer::tag('code', $default_model))
-);
-
-echo html_writer::end_tag('tbody');
-echo html_writer::end_tag('table');
-
-echo html_writer::end_div(); // card-body
-echo html_writer::end_div(); // card
-
-// Actions Card
-echo html_writer::start_div('card mb-3');
-echo html_writer::div('Setup Actions', 'card-header');
-echo html_writer::start_div('card-body');
-
-echo html_writer::start_div('d-grid gap-2');
-
-if (!$ws_enabled) {
-    echo html_writer::link($PAGE->url . '?action=enable_webservices', 
-        html_writer::tag('button', 'Enable Web Services', ['class' => 'btn btn-primary']));
-}
-
-if (!$DB->record_exists('external_functions', ['name' => 'local_ollamamcp_send_message'])) {
-    echo html_writer::link($PAGE->url . '?action=register_function', 
-        html_writer::tag('button', 'Register External Function', ['class' => 'btn btn-warning']));
-}
-
-if (!$DB->record_exists('external_services', ['shortname' => 'ollamamcp'])) {
-    echo html_writer::link($PAGE->url . '?action=create_service', 
-        html_writer::tag('button', 'Create Web Service', ['class' => 'btn btn-info']));
-}
-
-echo html_writer::link($PAGE->url . '?action=authorize_user', 
-    html_writer::tag('button', 'Authorize Admin User', ['class' => 'btn btn-secondary']));
-
-echo html_writer::end_div(); // d-grid
-echo html_writer::end_div(); // card-body
-echo html_writer::end_div(); // card
-
-// MCP Web Services Section
-echo html_writer::start_div('card mb-3');
-echo html_writer::div('MCP Web Services', 'card-header');
-echo html_writer::start_div('card-body');
-
-// Get only MCP-related services
-$mcp_services = $DB->get_records_select('external_services', 'shortname LIKE ?', ['%ollamamcp%'], 'name ASC');
-
-if ($mcp_services) {
-    echo html_writer::start_tag('table', ['class' => 'table table-striped']);
-    echo html_writer::start_tag('thead');
-    echo html_writer::tag('tr', 
-        html_writer::tag('th', 'Service Name') .
-        html_writer::tag('th', 'Short Name') .
-        html_writer::tag('th', 'Enabled') .
-        html_writer::tag('th', 'Functions') .
-        html_writer::tag('th', 'Users')
-    );
-    echo html_writer::end_tag('thead');
-    echo html_writer::start_tag('tbody');
-    
-    foreach ($mcp_services as $service) {
-        $function_count = $DB->count_records('external_services_functions', ['externalserviceid' => $service->id]);
-        $user_count = $DB->count_records('external_services_users', ['externalserviceid' => $service->id]);
-        
-        $enabled_badge = $service->enabled ? 
-            html_writer::tag('span', '✅ Yes', ['class' => 'badge bg-success']) : 
-            html_writer::tag('span', '❌ No', ['class' => 'badge bg-danger']);
-        
-        echo html_writer::tag('tr', 
-            html_writer::tag('td', htmlspecialchars($service->name)) .
-            html_writer::tag('td', html_writer::tag('code', htmlspecialchars($service->shortname))) .
-            html_writer::tag('td', $enabled_badge) .
-            html_writer::tag('td', $function_count) .
-            html_writer::tag('td', $user_count)
-        );
-    }
-    
-    echo html_writer::end_tag('tbody');
-    echo html_writer::end_tag('table');
-} else {
-    echo html_writer::tag('p', 'No MCP web services found.', ['class' => 'text-muted']);
-}
-
-echo html_writer::end_div(); // card-body
-echo html_writer::end_div(); // card
-
-// MCP External Functions Section
-echo html_writer::start_div('card mb-3');
-echo html_writer::div('MCP External Functions', 'card-header');
-echo html_writer::start_div('card-body');
-
-// Get only MCP-related functions
-$mcp_functions = $DB->get_records_select('external_functions', 'name LIKE ?', ['%ollamamcp%'], 'name ASC');
-
-if ($mcp_functions) {
-    echo html_writer::start_tag('table', ['class' => 'table table-striped']);
-    echo html_writer::start_tag('thead');
-    echo html_writer::tag('tr', 
-        html_writer::tag('th', 'Function Name') .
-        html_writer::tag('th', 'Class') .
-        html_writer::tag('th', 'Method') .
-        html_writer::tag('th', 'Type') .
-        html_writer::tag('th', 'AJAX') .
-        html_writer::tag('th', 'Description')
-    );
-    echo html_writer::end_tag('thead');
-    echo html_writer::start_tag('tbody');
-    
-    foreach ($mcp_functions as $function) {
-        $type_badge = $function->type === 'write' ? 
-            html_writer::tag('span', 'Write', ['class' => 'badge bg-warning']) : 
-            html_writer::tag('span', 'Read', ['class' => 'badge bg-info']);
-        
-        $ajax_badge = $function->ajax ? 
-            html_writer::tag('span', '✅ Yes', ['class' => 'badge bg-success']) : 
-            html_writer::tag('span', '❌ No', ['class' => 'badge bg-secondary']);
-        
-        echo html_writer::tag('tr', 
-            html_writer::tag('td', html_writer::tag('code', htmlspecialchars($function->name))) .
-            html_writer::tag('td', html_writer::tag('small', htmlspecialchars($function->classname))) .
-            html_writer::tag('td', htmlspecialchars($function->methodname)) .
-            html_writer::tag('td', $type_badge) .
-            html_writer::tag('td', $ajax_badge) .
-            html_writer::tag('td', htmlspecialchars($function->description))
-        );
-    }
-    
-    echo html_writer::end_tag('tbody');
-    echo html_writer::end_tag('table');
-} else {
-    echo html_writer::tag('p', 'No MCP external functions found.', ['class' => 'text-muted']);
-}
-
-echo html_writer::end_div(); // card-body
-echo html_writer::end_div(); // card
-
-// MCP Web Service Users Section
-echo html_writer::start_div('card mb-3');
-echo html_writer::div('MCP Web Service Users & Tokens', 'card-header');
-echo html_writer::start_div('card-body');
-
-// Get only MCP-related service users
-$mcp_service_users = $DB->get_records_sql("
-    SELECT u.username, u.email, s.name as service_name, s.shortname, t.token, t.timecreated
-    FROM {external_services_users} su
-    JOIN {user} u ON su.userid = u.id
-    JOIN {external_services} s ON su.externalserviceid = s.id
-    LEFT JOIN {external_tokens} t ON su.externalserviceid = t.externalserviceid AND su.userid = t.userid
-    WHERE s.shortname LIKE ?
-    ORDER BY s.name, u.username
-", ['%ollamamcp%']);
-
-if ($mcp_service_users) {
-    echo html_writer::start_tag('table', ['class' => 'table table-striped']);
-    echo html_writer::start_tag('thead');
-    echo html_writer::tag('tr', 
-        html_writer::tag('th', 'Username') .
-        html_writer::tag('th', 'Email') .
-        html_writer::tag('th', 'Service') .
-        html_writer::tag('th', 'Token') .
-        html_writer::tag('th', 'Created')
-    );
-    echo html_writer::end_tag('thead');
-    echo html_writer::start_tag('tbody');
-    
-    foreach ($mcp_service_users as $user) {
-        $token_display = $user->token ? 
-            substr($user->token, 0, 8) . '...' : 
-            html_writer::tag('span', 'No token', ['class' => 'text-muted']);
-        
-        echo html_writer::tag('tr', 
-            html_writer::tag('td', htmlspecialchars($user->username)) .
-            html_writer::tag('td', htmlspecialchars($user->email)) .
-            html_writer::tag('td', htmlspecialchars($user->service_name)) .
-            html_writer::tag('td', html_writer::tag('code', $token_display)) .
-            html_writer::tag('td', userdate($user->timecreated))
-        );
-    }
-    
-    echo html_writer::end_tag('tbody');
-    echo html_writer::end_tag('table');
-} else {
-    echo html_writer::tag('p', 'No MCP web service users found.', ['class' => 'text-muted']);
-}
+echo html_writer::link($PAGE->url . '?action=complete_setup', html_writer::tag('button', 'Complete Setup (All Steps)', ['class' => 'btn btn-lg btn-success w-100 mt-3']));
 
 echo html_writer::end_div(); // card-body
 echo html_writer::end_div(); // card
 
 // Test Section
-echo html_writer::start_div('card mb-3');
-echo html_writer::div('Test Functions', 'card-header');
+echo html_writer::start_div('card mt-4');
+echo html_writer::div('Test Web Service', 'card-header');
 echo html_writer::start_div('card-body');
 
-echo html_writer::start_div('row');
-echo html_writer::start_div('col-md-6');
+echo html_writer::tag('h4', 'Test the AI Assistant');
+echo html_writer::tag('p', 'Once the web service is set up, you can test the AI assistant:');
+echo html_writer::link('/local/ollamamcp/', html_writer::tag('button', 'Open AI Assistant Chat', ['class' => 'btn btn-primary']));
 
-echo html_writer::tag('h5', 'Test Ollama Connection');
-echo html_writer::link($CFG->wwwroot . '/local/ollamamcp/test_ollama.php', 
-    html_writer::tag('button', 'Test Ollama Server', ['class' => 'btn btn-outline-primary me-2']));
-
-echo html_writer::end_div(); // col
-echo html_writer::start_div('col-md-6');
-
-echo html_writer::tag('h5', 'Test AI Assistant');
-echo html_writer::link($CFG->wwwroot . '/local/ollamamcp/', 
-    html_writer::tag('button', 'Open AI Chat', ['class' => 'btn btn-outline-success me-2']));
-
-echo html_writer::end_div(); // col
-echo html_writer::end_div(); // row
+echo html_writer::tag('h4', 'API Endpoint');
+echo html_writer::tag('p', 'Web service endpoint:');
+echo html_writer::tag('code', $CFG->wwwroot . '/webservice/rest/server.php?wsprotocol=rest&wstoken=' . ($token ? $token->token : 'YOUR_TOKEN'), ['class' => 'd-block p-2 bg-light']);
 
 echo html_writer::end_div(); // card-body
 echo html_writer::end_div(); // card
-
-echo html_writer::end_div(); // col
-echo html_writer::end_div(); // row
 
 echo $OUTPUT->footer();
 ?>
