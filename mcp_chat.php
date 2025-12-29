@@ -9,7 +9,7 @@ if ($courseid > 0) {
     $course = $DB->get_record('course', ['id' => $courseid], '*', MUST_EXIST);
     require_login($course);
     $context = context_course::instance($courseid);
-    require_capability('moodle/course:update', $context);
+    require_capability('local/ollamamcp:use', $context);
     
     $PAGE->set_url('/local/ollamamcp/mcp_chat.php', ['courseid' => $courseid]);
     $PAGE->set_context($context);
@@ -19,28 +19,35 @@ if ($courseid > 0) {
     // System context - no specific course
     require_login();
     $context = context_system::instance();
-    require_capability('local/ollamamcp:use', $context);
-
+    
     $PAGE->set_url('/local/ollamamcp/mcp_chat.php');
     $PAGE->set_context($context);
     $PAGE->set_title('Ollama MCP - AI Assistant');
     $PAGE->set_heading('AI Assistant');
+}
 
-    // Check if plugin is enabled
-    if (!get_config('local_ollamamcp', 'enabled')) {
-        echo $OUTPUT->header();
-        echo $OUTPUT->notification('Plugin is disabled', 'error');
-        echo $OUTPUT->footer();
-        exit;
-    }
+// Check if plugin is enabled
+if (!get_config('local_ollamamcp', 'enabled')) {
+    echo $OUTPUT->header();
+    echo $OUTPUT->notification('Plugin is disabled', 'error');
+    echo $OUTPUT->footer();
+    exit;
+}
 
-    // Check if web services are enabled
-    if (!get_config('core', 'enablewebservices')) {
-        echo $OUTPUT->header();
-        echo $OUTPUT->notification('Web services are not enabled', 'error');
-        echo $OUTPUT->footer();
-        exit;
-    }
+// Check if web services are enabled
+if (!get_config('core', 'enablewebservices')) {
+    echo $OUTPUT->header();
+    echo $OUTPUT->notification('Web services are not enabled', 'error');
+    echo $OUTPUT->footer();
+    exit;
+}
+
+// Check if user has required capability
+if (!has_capability('moodle/site:config', $context) && !has_capability('local/ollamamcp:use', $context)) {
+    echo $OUTPUT->header();
+    echo $OUTPUT->notification('You do not have permission to access the Ollama AI Assistant. Please contact your Moodle administrator to get the required permissions.', 'error');
+    echo $OUTPUT->footer();
+    exit;
 }
 
 echo $OUTPUT->header();
@@ -181,6 +188,7 @@ function sendOllamaRequest(message) {
     var isUserQuery = message.toLowerCase().match(/users?|students?|teachers?|participants?|enrolled/);
     var isCategoryQuery = message.toLowerCase().match(/categories?|departments?|subjects?|areas/);
     var isStatsQuery = message.toLowerCase().match(/statistics?|stats?|numbers?|count|total|how many/);
+    var isPlatformQuery = message.toLowerCase().match(/platform|platform info|site info|moodle info|system info|about.*platform|about.*site/);
     
     var apiType = 'general';
     var apiParams = {};
@@ -200,34 +208,45 @@ function sendOllamaRequest(message) {
     } else if (isStatsQuery) {
         apiType = 'stats';
         apiParams = {type: 'stats'};
+    } else if (isPlatformQuery) {
+        apiType = 'platform';
+        apiParams = {type: 'platform'};
     }
     
     // Always get platform validation info first
-    fetch('" . $CFG->wwwroot . "/local/ollamamcp/api_courses.php?type=platform')
+    fetch('" . $CFG->wwwroot . "/local/ollamamcp/moodle_api.php?type=platform')
     .then(function(platformResponse) {
+        console.log('Platform API response status:', platformResponse.status);
         return platformResponse.json();
     })
     .then(function(platformData) {
+        console.log('Platform API data:', platformData);
         if (platformData.success) {
             var platformInfo = platformData.data;
             
             // If it's a Moodle-specific query, get the data first
             if (apiType !== 'general') {
-                var apiUrl = '" . $CFG->wwwroot . "/local/ollamamcp/api_courses.php';
+                var apiUrl = '" . $CFG->wwwroot . "/local/ollamamcp/moodle_api.php';
                 var queryString = Object.keys(apiParams).map(key => key + '=' + apiParams[key]).join('&');
+                
+                console.log('Fetching Moodle data from:', apiUrl + '?' + queryString);
                 
                 fetch(apiUrl + '?' + queryString)
                 .then(function(response) {
+                    console.log('Moodle data API response status:', response.status);
                     return response.json();
                 })
                 .then(function(moodleData) {
+                    console.log('Moodle data received:', moodleData);
                     if (moodleData.success) {
                         var contextInfo = getContextInfo(moodleData, apiType);
                         var enhancedPrompt = createPlatformSpecificPrompt(platformInfo, contextInfo, apiType, message);
+                        console.log('Enhanced prompt created:', enhancedPrompt);
                         
                         // Send enhanced prompt with real Moodle data to Ollama
                         sendToOllama(enhancedPrompt, model);
                     } else {
+                        console.log('Moodle data API failed, using platform-only');
                         // Fallback to platform-only prompt
                         var enhancedPrompt = createPlatformSpecificPrompt(platformInfo, '', 'general', message);
                         sendToOllama(enhancedPrompt, model);
@@ -242,9 +261,11 @@ function sendOllamaRequest(message) {
             } else {
                 // Regular prompt with platform context
                 var enhancedPrompt = createPlatformSpecificPrompt(platformInfo, '', 'general', message);
+                console.log('General prompt created:', enhancedPrompt);
                 sendToOllama(enhancedPrompt, model);
             }
         } else {
+            console.log('Platform API failed, using regular prompt');
             // Fallback to regular prompt
             sendToOllama(message, model);
         }
@@ -257,27 +278,34 @@ function sendOllamaRequest(message) {
 }
 
 function createPlatformSpecificPrompt(platformInfo, contextInfo, dataType, originalMessage) {
-    var prompt = 'You are an AI assistant for the Moodle LMS platform at: ' + platformInfo.platform_url + '\\n\\n';
-    prompt += 'PLATFORM IDENTIFICATION:\\n';
-    prompt += '- Platform Name: ' + platformInfo.platform_name + '\\n';
-    prompt += '- Platform URL: ' + platformInfo.platform_url + '\\n';
-    prompt += '- Platform Version: ' + platformInfo.platform_version + '\\n';
-    prompt += '- Site Name: ' + platformInfo.site_name + '\\n';
-    prompt += '- Validation Hash: ' + platformInfo.validation_hash + '\\n\\n';
+    var prompt = 'You are an AI assistant EXCLUSIVELY for the Moodle LMS platform at: ' + platformInfo.platform_url + '\\n\\n';
+    prompt += '=== CRITICAL PLATFORM IDENTIFICATION ===\\n';
+    prompt += 'Platform Name: ' + platformInfo.platform_name + '\\n';
+    prompt += 'Platform URL: ' + platformInfo.platform_url + '\\n';
+    prompt += 'Platform Version: ' + platformInfo.platform_version + '\\n';
+    prompt += 'Site Name: ' + platformInfo.site_name + '\\n';
+    prompt += 'Validation Hash: ' + platformInfo.validation_hash + '\\n\\n';
     
-    prompt += 'CRITICAL INSTRUCTIONS:\\n';
-    prompt += '1. You MUST ONLY use data from this specific Moodle platform at ' + platformInfo.platform_url + '\\n';
-    prompt += '2. NEVER reference any external platforms, courses, or generic examples\\n';
-    prompt += '3. All responses must be based exclusively on data from THIS Moodle installation\\n';
-    prompt += '4. If no data exists for a query, clearly state that no data exists in this Moodle platform\\n\\n';
+    prompt += '=== STRICT DATA USAGE RULES ===\\n';
+    prompt += '1. YOU MUST ONLY use data from THIS SPECIFIC Moodle platform at ' + platformInfo.platform_url + '\\n';
+    prompt += '2. NEVER reference ANY external platforms, websites, or generic examples\\n';
+    prompt += '3. NEVER mention Facebook, Instagram, Twitter, LinkedIn, YouTube, WhatsApp, etc.\\n';
+    prompt += '4. NEVER mention Amazon, eBay, TikTok, Fortnite, or any other platforms\\n';
+    prompt += '5. ALL responses must be based EXCLUSIVELY on data from THIS Moodle installation\\n';
+    prompt += '6. If no data exists for a query, clearly state: \'No data exists in this Moodle platform\'\\n';
+    prompt += '7. DO NOT make up or assume any information about this Moodle platform\\n';
+    prompt += '8. ONLY use the provided Moodle data below for your responses\\n\\n';
     
     if (contextInfo) {
-        prompt += 'AVAILABLE DATA FROM THIS MOODLE PLATFORM:\\n';
+        prompt += '=== AVAILABLE MOODLE DATA ===\\n';
         prompt += contextInfo + '\\n\\n';
     }
     
     prompt += 'User Question: ' + originalMessage + '\\n\\n';
-    prompt += 'IMPORTANT: Respond only with information from this Moodle platform at ' + platformInfo.platform_url + '.';
+    prompt += '=== FINAL INSTRUCTION ===\\n';
+    prompt += 'IMPORTANT: Respond ONLY with information from this Moodle platform at ' + platformInfo.platform_url + '.\\n';
+    prompt += 'If the user asks about platforms, social media, or anything not in the Moodle data above,\\n';
+    prompt += 'respond with: \'I can only provide information about this Moodle platform at ' + platformInfo.platform_url + '\'';
     
     return prompt;
 }

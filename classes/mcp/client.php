@@ -71,16 +71,24 @@ class client {
         
         // Enhanced prompt with strict Moodle platform-only context
         $enhanced_prompt = $user_context . $course_context . 
-                          "You are an AI assistant for THIS SPECIFIC MOODLE INSTALLATION at " . $CFG->wwwroot . ". " .
-                          "IMPORTANT: You MUST ONLY use data from this exact Moodle platform. " .
-                          "NEVER reference any external courses, platforms, or generic examples. " .
-                          "When asked about courses, list ONLY courses from this Moodle database. " .
-                          "When asked about users, refer ONLY to users registered in this Moodle system. " .
-                          "When asked about activities, refer ONLY to activities created in this Moodle platform. " .
-                          "When asked about categories, refer ONLY to categories in this Moodle installation. " .
-                          "All responses must be based exclusively on data from this Moodle platform at " . $CFG->wwwroot . ". " .
-                          "If no data is found for a query, clearly state that no data exists in this Moodle platform. " .
-                          "User message: " . $prompt;
+                          "=== MOODLE PLATFORM IDENTIFICATION ===\\n" .
+                          "You are an AI assistant EXCLUSIVELY for this Moodle installation at: " . $CFG->wwwroot . "\\n\\n" .
+                          "=== STRICT DATA USAGE RULES ===\\n" .
+                          "1. YOU MUST ONLY use data from THIS SPECIFIC Moodle platform\\n" .
+                          "2. NEVER reference ANY external platforms, websites, or social media\\n" .
+                          "3. NEVER mention Facebook, Instagram, Twitter, LinkedIn, YouTube, etc.\\n" .
+                          "4. NEVER mention Amazon, eBay, TikTok, Fortnite, or any other platforms\\n" .
+                          "5. ONLY use data from THIS Moodle database\\n" .
+                          "6. When asked about courses, list ONLY courses from this Moodle system\\n" .
+                          "7. When asked about users, refer ONLY to users registered in this Moodle\\n" .
+                          "8. When asked about activities, refer ONLY to activities in this Moodle\\n" .
+                          "9. When asked about categories, refer ONLY to categories in this Moodle\\n" .
+                          "10. If no data exists, state: 'No data exists in this Moodle platform'\\n" .
+                          "11. DO NOT make up or assume any information\\n\\n" .
+                          "=== USER QUESTION ===\\n" .
+                          "User message: " . $prompt . "\\n\\n" .
+                          "=== FINAL INSTRUCTION ===\\n" .
+                          "Respond ONLY with information from this Moodle platform at " . $CFG->wwwroot;
         
         $data = [
             'model' => $model,
