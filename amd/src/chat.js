@@ -39,6 +39,19 @@ define(['jquery'], function($) {
                         </div>
                     </div>
                     <div class="chat-input">
+                        <div class="quick-prompts">
+                            <div class="prompts-header">💡 Quick Prompts:</div>
+                            <div class="prompts-grid">
+                                <button class="prompt-btn" data-prompt="📊 Platform Info">📊 Platform Info</button>
+                                <button class="prompt-btn" data-prompt="📚 List Courses">📚 List Courses</button>
+                                <button class="prompt-btn" data-prompt="👥 List Users">👥 List Users</button>
+                                <button class="prompt-btn" data-prompt="📝 List Activities">📝 List Activities</button>
+                                <button class="prompt-btn" data-prompt="📈 Show Statistics">📈 Show Statistics</button>
+                                <button class="prompt-btn" data-prompt="🔍 Check Server">🔍 Check Server</button>
+                                <button class="prompt-btn" data-prompt="📋 List Models">📋 List Models</button>
+                                <button class="prompt-btn" data-prompt="🗑️ Clear Chat">🗑️ Clear Chat</button>
+                            </div>
+                        </div>
                         <div class="input-container">
                             <textarea id="chat-input" placeholder="Ask me anything about Moodle..." rows="2"></textarea>
                             <button id="send-message" class="send-btn" title="Send message">
@@ -424,6 +437,50 @@ define(['jquery'], function($) {
                         color: #64748b;
                         font-style: italic;
                     }
+                    
+                    /* Quick Prompts Styling */
+                    .quick-prompts {
+                        background: #f8fafc;
+                        border-top: 1px solid #e2e8f0;
+                        padding: 12px 16px;
+                    }
+                    .prompts-header {
+                        font-size: 12px;
+                        font-weight: 600;
+                        color: #64748b;
+                        margin-bottom: 8px;
+                        text-transform: uppercase;
+                        letter-spacing: 0.5px;
+                    }
+                    .prompts-grid {
+                        display: grid;
+                        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+                        gap: 6px;
+                    }
+                    .prompt-btn {
+                        background: white;
+                        border: 1px solid #e2e8f0;
+                        border-radius: 6px;
+                        padding: 6px 8px;
+                        font-size: 11px;
+                        font-weight: 500;
+                        color: #475569;
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                        text-align: center;
+                        line-height: 1.2;
+                    }
+                    .prompt-btn:hover {
+                        background: #667eea;
+                        color: white;
+                        border-color: #667eea;
+                        transform: translateY(-1px);
+                        box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+                    }
+                    .prompt-btn:active {
+                        transform: translateY(0);
+                        box-shadow: 0 1px 2px rgba(102, 126, 234, 0.2);
+                    }
                 </style>
             `;
 
@@ -434,6 +491,12 @@ define(['jquery'], function($) {
             $('#send-message').click(function() {
                 sendMessage.call(self);
             });
+            
+            // Handle quick prompt buttons
+            $('.prompt-btn').click(function() {
+                var prompt = $(this).data('prompt');
+                handleQuickPrompt.call(self, prompt);
+            });
 
             $('#chat-input').keypress(function(e) {
                 if (e.which === 13 && !e.shiftKey) {
@@ -443,19 +506,70 @@ define(['jquery'], function($) {
             });
 
             /**
-             * Send a message to the AI assistant
+             * Handle quick prompt button clicks
+             * @param {string} prompt - The prompt text
              */
-            function sendMessage() {
+            function handleQuickPrompt(prompt) {
+                var self = this;
+                
+                switch(prompt) {
+                    case '📊 Platform Info':
+                        sendMessage.call(self, 'Show me platform information');
+                        break;
+                    case '📚 List Courses':
+                        sendMessage.call(self, 'List all available courses');
+                        break;
+                    case '👥 List Users':
+                        sendMessage.call(self, 'List all users in the system');
+                        break;
+                    case '📝 List Activities':
+                        sendMessage.call(self, 'List all activities in this course');
+                        break;
+                    case '📈 Show Statistics':
+                        sendMessage.call(self, 'Show me system statistics');
+                        break;
+                    case '🔍 Check Server':
+                        sendMessage.call(self, 'Check server status and connectivity');
+                        break;
+                    case '📋 List Models':
+                        sendMessage.call(self, 'List available AI models');
+                        break;
+                    case '🗑️ Clear Chat':
+                        clearChat.call(self);
+                        break;
+                    default:
+                        sendMessage.call(self, prompt);
+                        break;
+                }
+            }
+            
+            /**
+             * Clear the chat history
+             */
+            function clearChat() {
+                $('#chat-messages').empty();
+                addMessage('Chat history cleared. How can I help you?', 'assistant');
+            }
+
+            /**
+             * Send a message to the AI assistant
+             * @param {string} customMessage - Optional custom message to send
+             */
+            function sendMessage(customMessage) {
                 var input = $('#chat-input');
-                var message = input.val().trim();
+                var message = customMessage || input.val().trim();
 
                 if (!message) {
                     return;
                 }
 
+                // Clear input if not using custom message
+                if (!customMessage) {
+                    input.val('');
+                }
+
                 // Add user message
                 addMessage(message, 'user');
-                input.val('');
 
                 // Show typing indicator
                 addMessage('Thinking...', 'assistant typing');
