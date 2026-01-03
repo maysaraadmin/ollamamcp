@@ -70,6 +70,7 @@ try {
             
         case 'activities':
             if ($courseid > 0) {
+                // Get activities for specific course
                 $activities = $DB->get_records('course_modules', ['course' => $courseid], 'id ASC', 'id, module, instance', 0, $limit);
                 $data = [];
                 foreach ($activities as $activity) {
@@ -78,12 +79,31 @@ try {
                         $data[] = [
                             'id' => $activity->id,
                             'type' => $module->name,
-                            'instance' => $activity->instance
+                            'instance' => $activity->instance,
+                            'course' => $courseid
                         ];
                     }
                 }
             } else {
-                $data = ['message' => 'Course ID required for activities'];
+                // Get activities from all visible courses
+                $courses = $DB->get_records('course', ['visible' => 1], 'fullname ASC', 'id, fullname', 0, $limit);
+                $data = [];
+                foreach ($courses as $course) {
+                    if ($course->id == 1) continue; // Skip site course
+                    $activities = $DB->get_records('course_modules', ['course' => $course->id], 'id ASC', 'id, module, instance', 0, 5);
+                    foreach ($activities as $activity) {
+                        $module = $DB->get_record('modules', ['id' => $activity->module]);
+                        if ($module) {
+                            $data[] = [
+                                'id' => $activity->id,
+                                'type' => $module->name,
+                                'instance' => $activity->instance,
+                                'course' => $course->id,
+                                'course_name' => $course->fullname
+                            ];
+                        }
+                    }
+                }
             }
             break;
             

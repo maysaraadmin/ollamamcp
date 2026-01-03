@@ -523,7 +523,7 @@ define(['jquery'], function($) {
                         sendMessage.call(self, 'List all users in the system');
                         break;
                     case '📝 List Activities':
-                        sendMessage.call(self, 'List all activities in this course');
+                        sendMessage.call(self, 'List all activities from all courses');
                         break;
                     case '📈 Show Statistics':
                         sendMessage.call(self, 'Show me system statistics');
