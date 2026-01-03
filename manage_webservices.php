@@ -181,19 +181,15 @@ if ($message) {
 
 // Plugin Settings Status Section
 echo html_writer::start_div('card');
-echo html_writer::div('Plugin Settings Status', 'card-header');
+echo html_writer::div('Current Plugin Settings (from settings.php)', 'card-header');
 echo html_writer::start_div('card-body');
 
 $plugin_enabled = get_config('local_ollamamcp', 'enabled');
 $ws_enabled_plugin = get_config('local_ollamamcp', 'enablewebservices');
-$autocreate = get_config('local_ollamamcp', 'autocreatewebservice');
-$createtoken = get_config('local_ollamamcp', 'createtokenforadmin');
 
 echo html_writer::tag('h4', 'Plugin Configuration');
 echo html_writer::tag('p', 'Plugin enabled: ' . ($plugin_enabled ? html_writer::tag('span', '✅ Yes', ['style' => 'color: green;']) : html_writer::tag('span', '❌ No', ['style' => 'color: red;'])));
 echo html_writer::tag('p', 'Web services enabled in plugin: ' . ($ws_enabled_plugin ? html_writer::tag('span', '✅ Yes', ['style' => 'color: green;']) : html_writer::tag('span', '❌ No', ['style' => 'color: red;'])));
-echo html_writer::tag('p', 'Auto-create service: ' . ($autocreate ? html_writer::tag('span', '✅ Yes', ['style' => 'color: green;']) : html_writer::tag('span', '❌ No', ['style' => 'color: red;'])));
-echo html_writer::tag('p', 'Create admin token: ' . ($createtoken ? html_writer::tag('span', '✅ Yes', ['style' => 'color: green;']) : html_writer::tag('span', '❌ No', ['style' => 'color: red;'])));
 echo html_writer::tag('p', 'Service name: ' . html_writer::tag('strong', $service_name));
 echo html_writer::tag('p', 'Service short name: ' . html_writer::tag('strong', $service_shortname));
 
@@ -214,11 +210,50 @@ $function = $DB->get_record('external_functions', ['name' => 'local_ollamamcp_se
 $admin_user = $DB->get_record('user', ['username' => 'admin']);
 $token = null;
 if ($admin_user) {
+    // Debug: Show admin user found
+    error_log('Admin user found: ' . $admin_user->id . ' (' . $admin_user->username . ')');
+    
+    // Try to get existing token first
     $token = $DB->get_record_sql("
         SELECT t.* FROM {external_tokens} t
         JOIN {external_services} s ON t.externalserviceid = s.id
         WHERE s.shortname = ? AND t.userid = ?
     ", [$service_shortname, $admin_user->id]);
+    
+    // Debug: Show token lookup result
+    error_log('Token lookup result: ' . ($token ? 'Found token ID: ' . $token->id : 'No token found'));
+    
+    // If no token exists, try to create one
+    if (!$token) {
+        // Debug: Attempting to create token
+        error_log('No token found, attempting to create token for service: ' . $service_shortname);
+        
+        // Get the web service
+        $webservice = $DB->get_record('external_services', ['shortname' => $service_shortname]);
+        
+        if ($webservice) {
+            // Create token
+            $token = new stdClass();
+            $token->token = md5(uniqid('', true));
+            $token->externalserviceid = $webservice->id;
+            $token->userid = $admin_user->id;
+            $token->contextid = context_system::instance()->id;
+            $token->creatorid = $admin_user->id;
+            $token->timecreated = time();
+            $token->tokentype = 0;
+            
+            $token_id = $DB->insert_record('external_tokens', $token);
+            
+            // Debug: Token creation success
+            error_log('Token created successfully: ID ' . $token_id . ' for user ' . $admin_user->id);
+        } else {
+            // Debug: Service not found
+            error_log('Web service not found for shortname: ' . $service_shortname);
+        }
+    }
+} else {
+    // Debug: Admin user not found
+    error_log('Admin user not found in database');
 }
 
 echo html_writer::tag('h4', 'Web Service Configuration');
