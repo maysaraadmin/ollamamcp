@@ -71,20 +71,11 @@ if ($hassiteconfig) {
         get_string('webserviceshortname_desc', 'local_ollamamcp'),
         'ollamamcp', PARAM_ALPHANUMEXT));
     
-    $settings->add(new local_ollamamcp_admin_setting_autocreate('local_ollamamcp/autocreatewebservice',
-        get_string('autocreatewebservice', 'local_ollamamcp'),
-        get_string('autocreatewebservice_desc', 'local_ollamamcp'), 0));
-    
-    $settings->add(new admin_setting_configcheckbox('local_ollamamcp/createtokenforadmin',
-        get_string('createtokenforadmin', 'local_ollamamcp'),
-        get_string('createtokenforadmin_desc', 'local_ollamamcp'), 0));
-    
     // Token Management Section
     $settings->add(new admin_setting_heading('local_ollamamcp/tokenheading',
         get_string('tokenheading', 'local_ollamamcp'),
         get_string('tokenheading_desc', 'local_ollamamcp')));
     
-    // Display current token info (read-only)
     $token_info = null;
     if (function_exists('local_ollamamcp_get_token_info')) {
         $token_info = local_ollamamcp_get_token_info();
@@ -108,7 +99,7 @@ if ($hassiteconfig) {
         $settings->add(new admin_setting_configtext('local_ollamamcp/tokenvalue',
             get_string('tokenvalue', 'local_ollamamcp'),
             get_string('tokenvalue_desc', 'local_ollamamcp'),
-            get_string('notokenfound', 'local_ollamamcp'), PARAM_TEXT));
+            '', PARAM_TEXT));
     }
     
     $settings->add(new local_ollamamcp_admin_setting_regeneratetoken('local_ollamamcp/regeneratetoken',
