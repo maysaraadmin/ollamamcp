@@ -18,3 +18,37 @@ $string['curl_error'] = 'cURL Error';
 $string['json_error'] = 'JSON Error';
 $string['plugindisabled'] = 'Plugin is disabled';
 $string['api_error'] = 'API Error';
+
+// Documentation Search Strings
+$string['docsearchheading'] = 'Documentation Search';
+$string['docsearchheading_desc'] = 'Configure AI documentation search capabilities';
+$string['enable_docsearch'] = 'Enable Documentation Search';
+$string['enable_docsearch_desc'] = 'Allow AI to search Moodle documentation for better answers';
+$string['docsearch_limit'] = 'Search Results Limit';
+$string['docsearch_limit_desc'] = 'Maximum number of documentation results to include in AI context';
+
+// Web Service Configuration Strings
+$string['webserviceheading'] = 'Web Service Configuration';
+$string['webserviceheading_desc'] = 'Configure Moodle web services for Ollama MCP integration';
+$string['enablewebservices'] = 'Enable Web Services';
+$string['enablewebservices_desc'] = 'Enable Moodle web services and REST protocol for this plugin';
+$string['webservicename'] = 'Web Service Name';
+$string['webservicename_desc'] = 'Display name for the web service';
+$string['webserviceshortname'] = 'Web Service Short Name';
+$string['webserviceshortname_desc'] = 'Unique identifier for the web service (alphanumeric only)';
+$string['autocreatewebservice'] = 'Auto-create Web Service';
+$string['autocreatewebservice_desc'] = 'Automatically create the web service when settings are saved';
+$string['createtokenforadmin'] = 'Create Admin Token';
+$string['createtokenforadmin_desc'] = 'Automatically create a web service token for the admin user';
+$string['error_invalid_shortname'] = 'Web service short name must contain only letters, numbers, and underscores';
+
+// Token Management Strings
+$string['tokenheading'] = 'Token Management';
+$string['tokenheading_desc'] = 'View and manage web service tokens for API access';
+$string['tokeninfo'] = 'Token Information';
+$string['tokeninfo_desc'] = 'Current token details (read-only)';
+$string['tokenvalue'] = 'Token Value';
+$string['tokenvalue_desc'] = 'Current web service token (read-only)';
+$string['notokenfound'] = 'No token found - enable web services and create token';
+$string['regeneratetoken'] = 'Regenerate Token';
+$string['regeneratetoken_desc'] = 'Generate a new web service token (this will invalidate the current token)';

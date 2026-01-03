@@ -2,6 +2,7 @@
 require_once('../../config.php');
 require_once($CFG->libdir.'/adminlib.php');
 require_once($CFG->libdir.'/weblib.php');
+require_once(__DIR__.'/lib.php');
 
 // Set up page context
 require_login();
@@ -10,21 +11,27 @@ require_capability('moodle/site:config', $context);
 
 $PAGE->set_url('/local/ollamamcp/manage_webservices.php');
 $PAGE->set_context($context);
-$PAGE->set_title('Ollama MCP - Web Service Management');
-$PAGE->set_heading('Web Service Management');
+$PAGE->set_title(get_string('pluginname', 'local_ollamamcp') . ' - ' . get_string('webserviceheading', 'local_ollamamcp'));
+$PAGE->set_heading(get_string('webserviceheading', 'local_ollamamcp'));
 
 echo $OUTPUT->header();
-echo $OUTPUT->heading('Ollama MCP Web Service Management');
+echo $OUTPUT->heading(get_string('pluginname', 'local_ollamamcp') . ' - ' . get_string('webserviceheading', 'local_ollamamcp'));
 
 // Handle actions
 $action = optional_param('action', '', PARAM_ALPHA);
 $message = '';
+$message_type = 'success';
+
+// Get plugin settings
+$service_name = get_config('local_ollamamcp', 'webservicename') ?: 'Ollama MCP Service';
+$service_shortname = get_config('local_ollamamcp', 'webserviceshortname') ?: 'ollamamcp';
 
 // 1. Enable Web Services
 if ($action === 'enable_webservices') {
     set_config('enablewebservices', 1);
     set_config('webserviceprotocols', 'rest');
-    $message = 'Web services and REST protocol enabled';
+    set_config('local_ollamamcp/enablewebservices', 1);
+    $message = get_string('enablewebservices', 'local_ollamamcp') . ' ' . get_string('enabled', 'local_ollamamcp');
 }
 
 // 2. Register External Function
@@ -53,16 +60,16 @@ if ($action === 'register_function') {
 // 3. Create Web Service
 if ($action === 'create_service') {
     $webservice = new stdClass();
-    $webservice->name = 'Ollama MCP Service';
+    $webservice->name = $service_name;
     $webservice->timecreated = time();
     $webservice->timemodified = time();
-    $webservice->shortname = 'ollamamcp';
+    $webservice->shortname = $service_shortname;
     $webservice->enabled = 1;
     $webservice->downloadfiles = 0;
     $webservice->uploadfiles = 0;
     $webservice->restrictedusers = 0;
 
-    $existing = $DB->get_record('external_services', ['shortname' => 'ollamamcp']);
+    $existing = $DB->get_record('external_services', ['shortname' => $service_shortname]);
     if ($existing) {
         $webservice->id = $existing->id;
         $DB->update_record('external_services', $webservice);
@@ -93,7 +100,7 @@ if ($action === 'create_token') {
     $admin_user = $DB->get_record('user', ['username' => 'admin']);
     if ($admin_user) {
         // Get the web service
-        $webservice = $DB->get_record('external_services', ['shortname' => 'ollamamcp']);
+        $webservice = $DB->get_record('external_services', ['shortname' => $service_shortname]);
         
         if ($webservice) {
             // Check if token already exists
@@ -101,7 +108,7 @@ if ($action === 'create_token') {
                 SELECT t.* FROM {external_tokens} t
                 JOIN {external_services} s ON t.externalserviceid = s.id
                 WHERE t.userid = ? AND s.shortname = ?
-            ", [$admin_user->id, 'ollamamcp']);
+            ", [$admin_user->id, $service_shortname]);
             
             if (!$existing_token) {
                 // Create token
@@ -134,134 +141,91 @@ if ($action === 'create_token') {
                 $DB->insert_record('external_services_users', $auth);
                 $message .= ' and admin user authorized';
             }
+        } else {
+            $message = 'Web service not found. Please create the service first.';
+            $message_type = 'warning';
         }
+    } else {
+        $message = 'Admin user not found';
+        $message_type = 'error';
     }
 }
 
 // 5. Complete Setup (all in one)
 if ($action === 'complete_setup') {
-    // Enable web services and REST protocol
-    set_config('enablewebservices', 1);
-    set_config('webserviceprotocols', 'rest');
-    
-    // Create web service
-    $webservice = new stdClass();
-    $webservice->name = 'Ollama MCP Service';
-    $webservice->timecreated = time();
-    $webservice->timemodified = time();
-    $webservice->shortname = 'ollamamcp';
-    $webservice->enabled = 1;
-    $webservice->downloadfiles = 0;
-    $webservice->uploadfiles = 0;
-    $webservice->restrictedusers = 0;
-
-    $existing = $DB->get_record('external_services', ['shortname' => 'ollamamcp']);
-    if ($existing) {
-        $webservice->id = $existing->id;
-        $DB->update_record('external_services', $webservice);
+    $result = local_ollamamcp_setup_webservice(true);
+    if ($result) {
+        $message = 'Complete web service setup finished successfully!';
     } else {
-        $service_id = $DB->insert_record('external_services', $webservice);
-        $webservice->id = $service_id;
+        $message = 'Web service setup failed. Check logs for details.';
+        $message_type = 'error';
     }
-    
-    // Add function to service
-    $service_function = new stdClass();
-    $service_function->externalserviceid = $webservice->id;
-    $service_function->functionname = 'local_ollamamcp_send_message';
+}
 
-    $existing_func = $DB->get_record('external_services_functions', [
-        'externalserviceid' => $webservice->id,
-        'functionname' => 'local_ollamamcp_send_message'
-    ]);
-
-    if (!$existing_func) {
-        $DB->insert_record('external_services_functions', $service_function);
-    }
-    
-    // Register external function
-    $function = [
-        'name' => 'local_ollamamcp_send_message',
-        'classname' => 'local_ollamamcp\\external\\send_message',
-        'methodname' => 'execute',
-        'description' => 'Send message to AI assistant',
-        'type' => 'write',
-        'capabilities' => '',
-        'ajax' => true,
-    ];
-    
-    $existing_func = $DB->get_record('external_functions', ['name' => $function['name']]);
-    if ($existing_func) {
-        $function['id'] = $existing_func->id;
-        $DB->update_record('external_functions', $function);
+// 6. Sync with plugin settings
+if ($action === 'sync_settings') {
+    $result = local_ollamamcp_setup_webservice(get_config('local_ollamamcp', 'enablewebservices'));
+    if ($result) {
+        $message = 'Web service synchronized with plugin settings';
     } else {
-        $DB->insert_record('external_functions', $function);
+        $message = 'Synchronization failed. Check logs for details.';
+        $message_type = 'error';
     }
-    
-    // Create token and authorize admin user
-    $admin_user = $DB->get_record('user', ['username' => 'admin']);
-    if ($admin_user) {
-        $existing_token = $DB->get_record_sql("
-            SELECT t.* FROM {external_tokens} t
-            JOIN {external_services} s ON t.externalserviceid = s.id
-            WHERE t.userid = ? AND s.shortname = ?
-        ", [$admin_user->id, 'ollamamcp']);
-        
-        if (!$existing_token) {
-            $token = new stdClass();
-            $token->token = md5(uniqid('', true));
-            $token->externalserviceid = $webservice->id;
-            $token->userid = $admin_user->id;
-            $token->contextid = $context->id;
-            $token->creatorid = $admin_user->id;
-            $token->timecreated = time();
-            $token->tokentype = 0;
-            
-            $DB->insert_record('external_tokens', $token);
-        }
-        
-        $auth = new stdClass();
-        $auth->externalserviceid = $webservice->id;
-        $auth->userid = $admin_user->id;
-        
-        $existing_auth = $DB->get_record('external_services_users', [
-            'externalserviceid' => $webservice->id,
-            'userid' => $admin_user->id
-        ]);
-        
-        if (!$existing_auth) {
-            $DB->insert_record('external_services_users', $auth);
-        }
-    }
-    
-    $message = 'Complete web service setup finished successfully!';
 }
 
 // Display status message
 if ($message) {
-    echo html_writer::div($message, 'alert alert-success');
+    $alert_class = $message_type === 'error' ? 'alert-danger' : ($message_type === 'warning' ? 'alert-warning' : 'alert-success');
+    echo html_writer::div($message, 'alert ' . $alert_class);
 }
 
-// Current Status Section
+// Plugin Settings Status Section
 echo html_writer::start_div('card');
+echo html_writer::div('Plugin Settings Status', 'card-header');
+echo html_writer::start_div('card-body');
+
+$plugin_enabled = get_config('local_ollamamcp', 'enabled');
+$ws_enabled_plugin = get_config('local_ollamamcp', 'enablewebservices');
+$autocreate = get_config('local_ollamamcp', 'autocreatewebservice');
+$createtoken = get_config('local_ollamamcp', 'createtokenforadmin');
+
+echo html_writer::tag('h4', 'Plugin Configuration');
+echo html_writer::tag('p', 'Plugin enabled: ' . ($plugin_enabled ? html_writer::tag('span', '✅ Yes', ['style' => 'color: green;']) : html_writer::tag('span', '❌ No', ['style' => 'color: red;'])));
+echo html_writer::tag('p', 'Web services enabled in plugin: ' . ($ws_enabled_plugin ? html_writer::tag('span', '✅ Yes', ['style' => 'color: green;']) : html_writer::tag('span', '❌ No', ['style' => 'color: red;'])));
+echo html_writer::tag('p', 'Auto-create service: ' . ($autocreate ? html_writer::tag('span', '✅ Yes', ['style' => 'color: green;']) : html_writer::tag('span', '❌ No', ['style' => 'color: red;'])));
+echo html_writer::tag('p', 'Create admin token: ' . ($createtoken ? html_writer::tag('span', '✅ Yes', ['style' => 'color: green;']) : html_writer::tag('span', '❌ No', ['style' => 'color: red;'])));
+echo html_writer::tag('p', 'Service name: ' . html_writer::tag('strong', $service_name));
+echo html_writer::tag('p', 'Service short name: ' . html_writer::tag('strong', $service_shortname));
+
+echo html_writer::end_div(); // card-body
+echo html_writer::end_div(); // card
+
+// Current Status Section
+echo html_writer::start_div('card mt-4');
 echo html_writer::div('Current Web Service Status', 'card-header');
 echo html_writer::start_div('card-body');
 
 // Check current status
 $ws_enabled = get_config('core', 'enablewebservices');
 $protocols = get_config('core', 'webserviceprotocols');
-$service = $DB->get_record('external_services', ['shortname' => 'ollamamcp']);
+$service = $DB->get_record('external_services', ['shortname' => $service_shortname]);
 $function = $DB->get_record('external_functions', ['name' => 'local_ollamamcp_send_message']);
-$token = $DB->get_record_sql("
-    SELECT t.* FROM {external_tokens} t
-    JOIN {external_services} s ON t.externalserviceid = s.id
-    WHERE s.shortname = ? AND t.userid = ?
-", ['ollamamcp', $USER->id]);
+// Get admin user for token display
+$admin_user = $DB->get_record('user', ['username' => 'admin']);
+$token = null;
+if ($admin_user) {
+    $token = $DB->get_record_sql("
+        SELECT t.* FROM {external_tokens} t
+        JOIN {external_services} s ON t.externalserviceid = s.id
+        WHERE s.shortname = ? AND t.userid = ?
+    ", [$service_shortname, $admin_user->id]);
+}
 
 echo html_writer::tag('h4', 'Web Service Configuration');
 echo html_writer::tag('p', 'Web services enabled: ' . ($ws_enabled ? html_writer::tag('span', '✅ Yes', ['style' => 'color: green;']) : html_writer::tag('span', '❌ No', ['style' => 'color: red;'])));
 echo html_writer::tag('p', 'Available protocols: ' . htmlspecialchars($protocols));
 
-echo html_writer::tag('h4', 'Ollama MCP Service');
+echo html_writer::tag('h4', $service_name . ' Service');
 if ($service) {
     echo html_writer::tag('p', 'Service: ' . html_writer::tag('span', '✅ ' . $service->name, ['style' => 'color: green;']));
     echo html_writer::tag('p', 'Short name: ' . $service->shortname);
@@ -299,36 +263,17 @@ echo html_writer::start_div('card mt-4');
 echo html_writer::div('Web Service Actions', 'card-header');
 echo html_writer::start_div('card-body');
 
-echo html_writer::tag('h4', 'Quick Actions');
+echo html_writer::tag('h4', 'Plugin Integration');
 echo html_writer::start_div('row');
 echo html_writer::start_div('col-md-6 mb-2');
-echo html_writer::link($PAGE->url . '?action=enable_webservices', html_writer::tag('button', 'Enable Web Services', ['class' => 'btn btn-primary w-100']));
+echo html_writer::link($PAGE->url . '?action=sync_settings', html_writer::tag('button', 'Sync with Plugin Settings', ['class' => 'btn btn-info w-100']));
 echo html_writer::end_div();
 echo html_writer::start_div('col-md-6 mb-2');
-echo html_writer::link($PAGE->url . '?action=register_function', html_writer::tag('button', 'Register Function', ['class' => 'btn btn-info w-100']));
-echo html_writer::end_div();
-echo html_writer::end_div();
-echo html_writer::start_div('row');
-echo html_writer::start_div('col-md-6 mb-2');
-echo html_writer::link($PAGE->url . '?action=create_service', html_writer::tag('button', 'Create Service', ['class' => 'btn btn-warning w-100']));
-echo html_writer::end_div();
-echo html_writer::start_div('col-md-6 mb-2');
-echo html_writer::link($PAGE->url . '?action=create_token', html_writer::tag('button', 'Create Token', ['class' => 'btn btn-success w-100']));
+echo html_writer::link(new moodle_url('/admin/settings.php', ['section' => 'local_ollamamcp']), html_writer::tag('button', 'Plugin Settings', ['class' => 'btn btn-secondary w-100']));
 echo html_writer::end_div();
 echo html_writer::end_div();
 
 echo html_writer::tag('hr', '');
-
-echo html_writer::tag('h4', 'Complete Setup');
-echo html_writer::tag('p', 'This will perform all the above steps in one operation:');
-echo html_writer::tag('ul', 
-    html_writer::tag('li', 'Enable web services and REST protocol') .
-    html_writer::tag('li', 'Create Ollama MCP web service') .
-    html_writer::tag('li', 'Register external function') .
-    html_writer::tag('li', 'Create web service token for admin user') .
-    html_writer::tag('li', 'Authorize admin user for the service')
-);
-echo html_writer::link($PAGE->url . '?action=complete_setup', html_writer::tag('button', 'Complete Setup (All Steps)', ['class' => 'btn btn-lg btn-success w-100 mt-3']));
 
 echo html_writer::end_div(); // card-body
 echo html_writer::end_div(); // card

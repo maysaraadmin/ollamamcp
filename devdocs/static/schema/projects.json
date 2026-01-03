@@ -1,0 +1,95 @@
+{
+    "title": "JSON schema for the Moodle Project list",
+    "$id": "https://moodledev.io/schema/projects.json",
+    "$schema": "https://json-schema.org/draft/2019-09/schema",
+    "type": "object",
+    "properties": {
+        "projects": {
+            "type": "object",
+            "patternProperties": {
+                ".*": {
+                    "$ref": "#/$defs/project"
+                }
+            },
+            "additionalProperties": false,
+            "unevaluatedProperties": false
+        }
+    },
+    "required": [
+        "projects"
+    ],
+    "$defs": {
+        "person": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "The name of the person"
+                },
+                "githubUsername": {
+                    "type": "string",
+                    "description": "The Github username of the person"
+                }
+            },
+            "additionalProperties": false,
+            "unevaluatedProperties": false
+        },
+        "link": {
+            "type": "object",
+            "properties": {
+                "link": {
+                    "type": "string",
+                    "description": "The link"
+                },
+                "title": {
+                    "type": "string",
+                    "description": "A summary title of the content in the link"
+                }
+            },
+            "additionalProperties": false,
+            "unevaluatedProperties": false
+        },
+        "project": {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string",
+                    "description": "The current status",
+                    "enum": [
+                        "Pending",
+                        "In Progress",
+                        "Complete",
+                        "Abandoned"
+                    ]
+                },
+                "owners": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/person"
+                    }
+                },
+                "discussionLinks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/link"
+                    }
+                },
+                "issueLinks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/link"
+                    }
+                }
+            },
+            "required": [
+                "title",
+                "status"
+            ],
+            "additionalProperties": false,
+            "unevaluatedProperties": false
+        }
+    }
+}
