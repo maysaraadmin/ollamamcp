@@ -102,7 +102,7 @@ if ($hassiteconfig) {
             '', PARAM_TEXT));
     }
     
-    $settings->add(new local_ollamamcp_admin_setting_regeneratetoken('local_ollamamcp/regeneratetoken',
-        get_string('regeneratetoken', 'local_ollamamcp'),
-        get_string('regeneratetoken_desc', 'local_ollamamcp'), 0));
+
+
+
 }
