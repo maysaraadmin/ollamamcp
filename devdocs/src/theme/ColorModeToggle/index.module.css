@@ -1,5 +1,0 @@
-.wrapper {
-  position: absolute;
-  right: calc(var(--ifm-menu-link-padding-horizontal) * 4);
-  float: right;
-}

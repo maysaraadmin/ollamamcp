@@ -19,14 +19,6 @@ $string['json_error'] = 'JSON Error';
 $string['plugindisabled'] = 'Plugin is disabled';
 $string['api_error'] = 'API Error';
 
-// Documentation Search Strings
-$string['docsearchheading'] = 'Documentation Search';
-$string['docsearchheading_desc'] = 'Configure AI documentation search capabilities';
-$string['enable_docsearch'] = 'Enable Documentation Search';
-$string['enable_docsearch_desc'] = 'Allow AI to search Moodle documentation for better answers';
-$string['docsearch_limit'] = 'Search Results Limit';
-$string['docsearch_limit_desc'] = 'Maximum number of documentation results to include in AI context';
-
 // Web Service Configuration Strings
 $string['webserviceheading'] = 'Web Service Configuration';
 $string['webserviceheading_desc'] = 'Configure Moodle web services for Ollama MCP integration';

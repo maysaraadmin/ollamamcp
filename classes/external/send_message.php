@@ -18,7 +18,6 @@ class send_message extends \external_api {
     public static function execute_returns() {
         return new \external_single_structure([
             'response' => new \external_value(PARAM_TEXT, 'AI response'),
-            'sources' => new \external_value(PARAM_TEXT, 'Documentation sources used', VALUE_OPTIONAL),
         ]);
     }
     
@@ -52,27 +51,12 @@ class send_message extends \external_api {
             // Use API class with generate endpoint (faster)
             $api = new \local_ollamamcp\mcp\client();
             
-            // Enhanced prompt with documentation context if enabled
             $enhanced_message = $message;
-            $doc_results = ['devdocs' => [], 'phpdocs' => []];
-            
-            if (get_config('local_ollamamcp', 'enable_docsearch')) {
-                // Search documentation for relevant context
-                $doc_search = new \local_ollamamcp\mcp\documentation_search();
-                $search_limit = get_config('local_ollamamcp', 'docsearch_limit') ?: 3;
-                $doc_results = $doc_search->search_documentation($message, ['limit' => $search_limit]);
-                $doc_context = $doc_search->format_results_for_ai($doc_results);
-                
-                if (!empty(trim($doc_context))) {
-                    $enhanced_message = "Context from Moodle documentation:\n" . $doc_context . "\n\nUser question: " . $message;
-                }
-            }
             
             $response = $api->generate_completion($enhanced_message);
             
             return [
-                'response' => $response['response'] ?? 'No response from AI assistant.',
-                'sources' => $this->format_sources($doc_results)
+                'response' => $response['response'] ?? 'No response from AI assistant.'
             ];
             
         } catch (\Exception $e) {
@@ -84,24 +68,5 @@ class send_message extends \external_api {
                 'response' => 'Sorry, I could not process your request. Please try again.',
             ];
         }
-    }
-    
-    /**
-     * Format documentation sources for response
-     * @param array $doc_results Documentation search results
-     * @return string Formatted sources
-     */
-    private static function format_sources($doc_results) {
-        $sources = [];
-        
-        foreach ($doc_results['devdocs'] as $result) {
-            $sources[] = "[DEVDOCS] {$result['title']} ({$result['file']})";
-        }
-        
-        foreach ($doc_results['phpdocs'] as $result) {
-            $sources[] = "[PHPDOCS] {$result['title']} ({$result['file']})";
-        }
-        
-        return empty($sources) ? '' : 'Sources: ' . implode(', ', $sources);
     }
 }

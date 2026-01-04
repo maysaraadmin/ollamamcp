@@ -38,20 +38,6 @@ if ($hassiteconfig) {
         get_string('contextlimit_desc', 'local_ollamamcp'),
         '4096', PARAM_INT));
     
-    // Documentation Search Settings
-    $settings->add(new admin_setting_heading('local_ollamamcp/docsearchheading',
-        get_string('docsearchheading', 'local_ollamamcp'),
-        get_string('docsearchheading_desc', 'local_ollamamcp')));
-    
-    $settings->add(new admin_setting_configcheckbox('local_ollamamcp/enable_docsearch',
-        get_string('enable_docsearch', 'local_ollamamcp'),
-        get_string('enable_docsearch_desc', 'local_ollamamcp'), 1));
-    
-    $settings->add(new admin_setting_configtext('local_ollamamcp/docsearch_limit',
-        get_string('docsearch_limit', 'local_ollamamcp'),
-        get_string('docsearch_limit_desc', 'local_ollamamcp'),
-        '3', PARAM_INT));
-    
     // Web Service Configuration
     $settings->add(new admin_setting_heading('local_ollamamcp/webserviceheading',
         get_string('webserviceheading', 'local_ollamamcp'),
